@@ -1,0 +1,16 @@
+# Sorties générées
+**/dist
+**/build
+**/coverage
+**/.turbo
+**/.docusaurus
+packages/*/skills
+
+# Skills Claude Code générés par `pnpm run install:skills`
+.claude/skills
+
+# Référence API générée par typedoc
+apps/docs/docs/*/api
+
+pnpm-lock.yaml
+.changeset/*.md
