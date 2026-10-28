@@ -13,16 +13,22 @@
     },
     "./package.json": "./package.json"
   },
+  "bin": {
+    "adr-nest-skills": "./bin/install-skills.mjs"
+  },
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    "bin"
   ],
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && pnpm run build:skills",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:skills": "node ../../scripts/install-skills.mjs --package adr-nest --skills-dir skills"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0 || ^12.0.0",

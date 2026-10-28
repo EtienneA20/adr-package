@@ -41,16 +41,22 @@
     },
     "./package.json": "./package.json"
   },
+  "bin": {
+    "adr-react-skills": "./bin/install-skills.mjs"
+  },
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    "bin"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && pnpm run build:skills",
     "dev": "tsup --watch",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:skills": "node ../../scripts/install-skills.mjs --package adr-react --skills-dir skills"
   },
   "peerDependencies": {
     "@tanstack/react-query": ">=5",

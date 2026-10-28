@@ -5,6 +5,7 @@
 **/.turbo
 **/.docusaurus
 packages/*/skills
+packages/*/bin
 
 # Skills Claude Code générés par `pnpm run install:skills`
 .claude/skills

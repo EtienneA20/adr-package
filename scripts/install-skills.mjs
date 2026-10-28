@@ -4,6 +4,8 @@
  * de son SKILLS.md (source de vérité) :
  *   .claude/skills/<skill>/SKILL.md      frontmatter + résumé court (rôle, catégories)
  *   .claude/skills/<skill>/reference.md  copie fidèle de l'inventaire complet
+ * et, en mode dépôt, recopie scripts/templates/install-skills-bin.mjs dans packages/<pkg>/bin/
+ * (script `<pkg>-skills` publié pour les projets consommateurs).
  *
  * Options :
  *   --check              n'écrit rien ; code de sortie 1 si les skills sont désynchronisés
@@ -25,11 +27,45 @@ import { listPublishedPackages, readText, ROOT_DIR } from "./lib/workspace.mjs";
 
 /** @typedef {import("./lib/workspace.mjs").PublishedPackage} PublishedPackage */
 /** @typedef {{ skill: string; source: string; files: Map<string, string> }} RenderedSkill */
+/**
+ * @typedef {object} InstallPlan
+ * @property {string} skillsDir - Dossier des skills de destination.
+ * @property {RenderedSkill[]} rendered - Skills attendus.
+ * @property {string[]} stale - Skills générés dont le package n'existe plus.
+ * @property {Map<string, string>} bins - Script bin attendu de chaque package (mode dépôt).
+ */
 
 const MARKER = "generated-by: adr-package/install-skills";
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_DESCRIPTION = 1024;
 const MAX_SKILL_LINES = 150;
+const BIN_TEMPLATE = path.join(ROOT_DIR, "scripts", "templates", "install-skills-bin.mjs");
+const BIN_HEADER =
+  "// Généré par `pnpm run install:skills` depuis scripts/templates/install-skills-bin.mjs : ne pas modifier.";
+
+/**
+ * Contenu attendu du script bin de chaque package (copie du modèle avec un en-tête).
+ *
+ * @param {PublishedPackage[]} packages - Packages concernés.
+ * @returns {Map<string, string>} Chemin du script → contenu attendu.
+ */
+function renderBins(packages) {
+  const [shebang = "", ...rest] = readText(BIN_TEMPLATE).split("\n");
+  const content = [shebang, BIN_HEADER, ...rest].join("\n");
+  return new Map(packages.map((pkg) => [path.join(pkg.dir, "bin", "install-skills.mjs"), content]));
+}
+
+/**
+ * Liste les scripts bin absents ou différents du modèle.
+ *
+ * @param {Map<string, string>} bins - Chemin du script → contenu attendu.
+ * @returns {string[]} Les chemins désynchronisés.
+ */
+function staleBins(bins) {
+  return [...bins]
+    .filter(([file, content]) => !existsSync(file) || readText(file) !== content)
+    .map(([file]) => file);
+}
 
 /**
  * Lit et valide le SKILLS.md d'un package.
@@ -190,6 +226,38 @@ function readOptions() {
 }
 
 /**
+ * Refuse de continuer si un dossier de destination existe sans le marqueur de génération.
+ *
+ * @param {string} skillsDir - Dossier des skills.
+ * @param {RenderedSkill[]} rendered - Skills à écrire.
+ * @throws {Error} Si un dossier de skill n'appartient pas à ce script.
+ */
+function assertOwnership(skillsDir, rendered) {
+  for (const { skill } of rendered) {
+    const dir = path.join(skillsDir, skill);
+    if (existsSync(dir) && !isGenerated(dir)) {
+      throw new Error(
+        `${dir} existe mais n'a pas été généré par install-skills : rien n'a été modifié`,
+      );
+    }
+  }
+}
+
+/**
+ * Liste les skills générés par ce script dont le package n'existe plus.
+ *
+ * @param {string} skillsDir - Dossier des skills.
+ * @param {RenderedSkill[]} rendered - Skills attendus.
+ * @returns {string[]} Les noms des dossiers orphelins.
+ */
+function findStaleSkills(skillsDir, rendered) {
+  if (!existsSync(skillsDir)) return [];
+  return readdirSync(skillsDir)
+    .filter((name) => !rendered.some(({ skill }) => skill === name))
+    .filter((name) => isGenerated(path.join(skillsDir, name)));
+}
+
+/**
  * Point d'entrée : rend tous les skills, vérifie la propriété des dossiers, puis écrit ou compare.
  *
  * @returns {number} Le code de sortie.
@@ -202,35 +270,25 @@ function main() {
   if (packages.length === 0)
     throw new Error(`aucun package publié ne correspond à « ${packageFilter ?? ""} »`);
   const rendered = packages.map(renderSkill);
-  for (const { skill } of rendered) {
-    const dir = path.join(skillsDir, skill);
-    if (existsSync(dir) && !isGenerated(dir)) {
-      throw new Error(
-        `${dir} existe mais n'a pas été généré par install-skills : rien n'a été modifié`,
-      );
-    }
-  }
-  const stale =
-    isRepo && !packageFilter && existsSync(skillsDir)
-      ? readdirSync(skillsDir)
-          .filter((name) => !rendered.some(({ skill }) => skill === name))
-          .filter((name) => isGenerated(path.join(skillsDir, name)))
-      : [];
-  return check ? reportCheck(skillsDir, rendered, stale) : install(skillsDir, rendered, stale);
+  assertOwnership(skillsDir, rendered);
+  // Les orphelins ne sont recherchés que dans le dépôt, avec la liste complète des packages.
+  const stale = isRepo && !packageFilter ? findStaleSkills(skillsDir, rendered) : [];
+  /** @type {InstallPlan} */
+  const plan = { skillsDir, rendered, stale, bins: isRepo ? renderBins(packages) : new Map() };
+  return check ? reportCheck(plan) : install(plan);
 }
 
 /**
  * Mode `--check` : affiche les différences sans rien écrire.
  *
- * @param {string} skillsDir - Dossier des skills.
- * @param {RenderedSkill[]} rendered - Skills attendus.
- * @param {string[]} stale - Skills générés dont le package n'existe plus.
+ * @param {InstallPlan} plan - Skills et scripts attendus.
  * @returns {number} 0 si synchronisé, 1 sinon.
  */
-function reportCheck(skillsDir, rendered, stale) {
+function reportCheck({ skillsDir, rendered, stale, bins }) {
   const differences = [
     ...rendered.flatMap((item) => diffSkill(path.join(skillsDir, item.skill), item)),
     ...stale.map((name) => `${path.join(skillsDir, name)} : skill généré orphelin`),
+    ...staleBins(bins).map((file) => `${file} : différent du modèle`),
   ];
   if (differences.length === 0) {
     console.log(`✔ skills synchronisés (${rendered.map((item) => item.skill).join(", ")})`);
@@ -243,14 +301,17 @@ function reportCheck(skillsDir, rendered, stale) {
 }
 
 /**
- * Mode normal : écrit les skills et supprime les skills générés orphelins.
+ * Mode normal : écrit les skills (et les scripts bin en mode dépôt), supprime les orphelins.
  *
- * @param {string} skillsDir - Dossier des skills.
- * @param {RenderedSkill[]} rendered - Skills à écrire.
- * @param {string[]} stale - Skills générés dont le package n'existe plus.
+ * @param {InstallPlan} plan - Skills et scripts à écrire.
  * @returns {number} Toujours 0.
  */
-function install(skillsDir, rendered, stale) {
+function install({ skillsDir, rendered, stale, bins }) {
+  for (const file of staleBins(bins)) {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, bins.get(file) ?? "");
+    console.log(`✔ mis à jour ${file}`);
+  }
   for (const item of rendered) {
     const changed = writeSkill(path.join(skillsDir, item.skill), item);
     console.log(`${changed ? "✔ mis à jour" : "= inchangé "} ${path.join(skillsDir, item.skill)}`);

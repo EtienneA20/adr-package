@@ -198,6 +198,16 @@ Règles :
   complet et une entrée cohérente dans `SKILLS.md`, et inversement) et
   `pnpm run install:skills --check` (`.claude/skills/` est synchronisé avec les `SKILLS.md`).
 
+Skills embarqués dans les packages publiés (pour les projets consommateurs) :
+
+- Le build de chaque package génère `skills/<package>/` (`pnpm run build:skills`, ignoré par
+  Git) ; `skills` et `bin` font partie du champ `files`.
+- `bin/install-skills.mjs` (commandes `adr-react-skills`, `adr-nest-skills`,
+  `adr-misc-skills`) est une **copie générée** de `scripts/templates/install-skills-bin.mjs` :
+  modifier le modèle, puis `pnpm run install:skills` (vérifié par `--check`).
+- Aucun `postinstall` : le consommateur lance `pnpm exec adr-react-skills` (`--global` ou
+  `--target <projet>` en option).
+
 Format (strict, analysé par les scripts de `scripts/`) :
 
 ```md

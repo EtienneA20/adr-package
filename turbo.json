@@ -4,8 +4,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.{ts,tsx}", "!**/*.md"],
-      "outputs": ["dist/**", "build/**"]
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.{ts,tsx}", "!**/README.md", "!**/CLAUDE.md"],
+      "outputs": ["dist/**", "build/**", "skills/**"]
     },
     "dev": {
       "cache": false,
