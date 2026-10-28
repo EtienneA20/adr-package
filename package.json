@@ -1,19 +1,12 @@
 {
-  "name": "adr-react-monorepo",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
-    "typecheck": "turbo typecheck",
-    "release": "turbo build --filter=@adr/adr-react && changeset publish"
+  "name": "adr-package",
+  "private": true,
+  "description": "Monorepo des packages npm @etiennea20 (adr-react, adr-nest, adr-misc).",
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=22"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
@@ -21,12 +14,18 @@
       "onFail": "download"
     }
   },
-  "packageManager": "pnpm@12.16.1",
-  "type": "module",
-  "private": "true",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "changeset": "changeset",
+    "release": "turbo run build --filter=./packages/* && changeset publish"
+  },
   "devDependencies": {
+    "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "turbo": "^2.11.10",
-    "typescript": "^6.0.3"
+    "typescript": "catalog:"
   }
 }

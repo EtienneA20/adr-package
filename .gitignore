@@ -1,5 +1,25 @@
+# Dépendances
 node_modules
+
+# Sorties de build
 dist
+build
+.docusaurus
 .turbo
-.env*
+coverage
+*.tsbuildinfo
 *.tgz
+
+# Skills embarqués dans les packages publiés (générés au build)
+packages/*/skills
+
+# Claude Code : seuls les réglages locaux sont ignorés, .claude/skills est versionné
+.claude/settings.local.json
+
+# Environnement
+.env*
+!.env.example
+
+# Système
+.DS_Store
+Thumbs.db

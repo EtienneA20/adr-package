@@ -1,7 +1,12 @@
 packages:
   - "packages/*"
   - "apps/*"
+
+# Depuis pnpm 11, `allowBuilds` remplace `onlyBuiltDependencies` (désormais ignoré).
+# N'autoriser que les scripts de build strictement nécessaires, paquet par paquet.
 allowBuilds:
-  esbuild: false
-onlyBuiltDependencies:
-  - esbuild
+  esbuild: true
+
+# Versions uniques partagées par tout le monorepo (`"typescript": "catalog:"`).
+catalog:
+  typescript: ~6.0.3
