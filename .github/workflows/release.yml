@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Jamais deux publications en parallèle, et jamais d'annulation en cours de publication.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  release:
+    name: PR « Version Packages » ou publication
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          # Écrit un .npmrc pointant le scope vers GitHub Packages, authentifié par NODE_AUTH_TOKEN.
+          registry-url: https://npm.pkg.github.com
+          scope: "@etiennea20"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Cache Turborepo
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-
+
+      # S'il reste des changesets : ouvre ou met à jour la PR « Version Packages ».
+      # Sinon (merge de cette PR) : `pnpm release` construit puis publie les nouvelles versions.
+      - uses: changesets/action@v2
+        with:
+          publish-script: pnpm release
+          commit-message: "chore: version des packages"
+          pr-title: "chore: version des packages"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

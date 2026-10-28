@@ -1,0 +1,36 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Une seule PR pour toutes les mises à jour mineures et correctives.
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Épinglé : tsup / rollup-plugin-dts ne supportent pas TypeScript 7.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # Épinglé : eslint-plugin-react et eslint-plugin-jsx-a11y ne supportent pas ESLint 10.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      - dependency-name: "@eslint/js"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
