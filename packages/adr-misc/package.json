@@ -1,0 +1,55 @@
+{
+  "name": "@etiennea20/adr-misc",
+  "version": "0.0.0",
+  "description": "Utilitaires partagés front et back : parsing (dayjs, temps), utilitaires de base, énumérations.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "dayjs": "^1.11.0"
+  },
+  "devDependencies": {
+    "@etiennea20/config": "workspace:*",
+    "@vitest/coverage-v8": "catalog:",
+    "dayjs": "^1.11.23",
+    "eslint": "catalog:",
+    "tsup": "^9.0.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EtienneA20/adr-package.git",
+    "directory": "packages/adr-misc"
+  }
+}

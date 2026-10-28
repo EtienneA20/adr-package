@@ -6,15 +6,14 @@ import { createTypeScriptImportResolver } from "eslint-import-resolver-typescrip
 import checkFile from "eslint-plugin-check-file";
 import { importX } from "eslint-plugin-import-x";
 import jsdocPlugin from "eslint-plugin-jsdoc";
-import jsxA11y from "eslint-plugin-jsx-a11y";
-import react from "eslint-plugin-react";
-import reactHooks from "eslint-plugin-react-hooks";
 import tsdoc from "eslint-plugin-tsdoc";
 import globals from "globals";
 import { configs as tsConfigs } from "typescript-eslint";
 
+import { presetConfigs } from "./eslint-presets.js";
+
 /** @typedef {import("eslint").Linter.Config} Config */
-/** @typedef {"library" | "react" | "nest" | "docs" | "node"} Preset */
+/** @typedef {import("./eslint-presets.js").Preset} Preset */
 
 const SOURCE_FILES = ["src/**/*.{ts,tsx}"];
 const TEST_FILES = ["**/*.test.{ts,tsx}"];
@@ -253,6 +252,7 @@ const testConfigs = [
       "vitest/no-disabled-tests": "error",
       "vitest/no-standalone-expect": "error",
       "vitest/valid-title": "error",
+      "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectTypeOf"] }],
       "max-lines-per-function": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
     },
@@ -285,55 +285,6 @@ const toolingConfigs = [
     rules: { "no-console": "off" },
   },
 ];
-
-/** @type {Config[]} */
-const reactConfigs = [
-  {
-    files: ["**/*.{ts,tsx}"],
-    ...react.configs.flat.recommended,
-    settings: { react: { version: "detect" } },
-    languageOptions: {
-      ...react.configs.flat.recommended?.languageOptions,
-      globals: globals.browser,
-    },
-  },
-  { files: ["**/*.{ts,tsx}"], ...react.configs.flat["jsx-runtime"] },
-  { files: ["**/*.{ts,tsx}"], ...reactHooks.configs.flat.recommended },
-  { files: ["**/*.{ts,tsx}"], ...jsxA11y.flatConfigs.strict },
-];
-
-/** @type {Config[]} */
-const nestConfigs = [
-  {
-    files: ["**/*.ts"],
-    languageOptions: {
-      parserOptions: { emitDecoratorMetadata: true, experimentalDecorators: true },
-      globals: globals.node,
-    },
-    rules: {
-      "@typescript-eslint/no-extraneous-class": ["error", { allowWithDecorator: true }],
-      // L'injection de dépendances de Nest passe par les constructeurs.
-      "max-params": ["error", 6],
-    },
-  },
-];
-
-/** @type {Config[]} */
-const docsConfigs = [
-  {
-    files: ["src/pages/**", "src/theme/**", "docusaurus.config.ts", "sidebars.ts"],
-    rules: { "import-x/no-default-export": "off" },
-  },
-];
-
-/** @type {Record<Preset, Config[]>} */
-const presetConfigs = {
-  library: [],
-  node: [{ languageOptions: { globals: globals.node } }],
-  react: reactConfigs,
-  nest: nestConfigs,
-  docs: [...reactConfigs, ...docsConfigs],
-};
 
 /**
  * Construit la configuration ESLint d'un projet du monorepo. Prettier est toujours appliqué en

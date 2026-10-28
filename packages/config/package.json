@@ -6,11 +6,15 @@
   "type": "module",
   "exports": {
     "./eslint": "./eslint.js",
-    "./vitest": "./vitest.js",
+    "./vitest": {
+      "types": "./vitest.d.ts",
+      "default": "./vitest.js"
+    },
     "./tsdoc.json": "./tsdoc.json"
   },
   "scripts": {
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@eslint/js": "^9.39.5",
