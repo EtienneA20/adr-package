@@ -32,7 +32,7 @@ qui **complète** celui-ci sans le répéter.
 │   ├── adr-nest/        # @etiennea20/adr-nest : utilitaires NestJS
 │   ├── adr-misc/        # @etiennea20/adr-misc : utilitaires partagés front et back
 │   └── config/          # @etiennea20/config : ESLint, Vitest, TSDoc partagés (privé)
-├── scripts/             # scripts Node du dépôt (check-skills, install-skills)
+├── scripts/             # check-skills, install-skills, templates/ (bin des packages)
 ├── eslint.config.js     # lint des fichiers de la racine
 ├── pnpm-workspace.yaml  # workspaces, catalog de versions, allowBuilds
 ├── tsconfig.base.json   # options TypeScript communes (strictes)
@@ -112,10 +112,10 @@ packages/<package>/
 ├── package.json
 ├── tsconfig.json
 ├── tsdoc.json         # étend @etiennea20/config/tsdoc.json (déclare @since)
-├── eslint.config.js
-├── tsup.config.ts     # (adr-nest : tsconfig.build.json + tsc)
-├── vitest.config.ts
-├── bin/               # script d'installation des skills pour les projets consommateurs
+├── eslint.config.js   # .mjs dans un package CommonJS (adr-nest)
+├── tsup.config.ts     # adr-nest : tsconfig.build.json + tsc
+├── vitest.config.ts   # .mts dans un package CommonJS (adr-nest)
+├── bin/               # script `<package>-skills` (généré depuis scripts/templates)
 ├── skills/            # généré au build depuis SKILLS.md, ignoré par Git, publié
 └── src/
     ├── index.ts       # unique point d'entrée public (réexporte les catégories)
@@ -275,7 +275,10 @@ Rôle du package, périmètre (court : repris dans SKILL.md, limité à 150 lign
 3. Ajouter un changeset (`pnpm changeset`) dès qu'un package publié change.
 4. Ouvrir une pull request vers `main` ; le titre suit aussi Conventional Commits (fusion en
    squash possible). La CI doit être verte.
-5. Le merge dans `main` ouvre ou met à jour la PR « Version Packages » ; son merge publie.
+5. Le merge dans `main` ouvre ou met à jour la PR « chore: version des packages » (workflow
+   `release.yml`) ; son merge publie sur GitHub Packages.
+6. Pendant la mise en place initiale du dépôt, les étapes ont été fusionnées localement ;
+   désormais **tout changement passe par une PR** (ne jamais pousser directement sur `main`).
 
 Choix du type de changeset : `patch` pour un correctif, `minor` pour un ajout rétrocompatible,
 `major` pour toute rupture de l'API publique (renommage, suppression, changement de signature
@@ -304,5 +307,12 @@ Checklist à suivre avant tout commit de feature :
   (`"vitest": "catalog:"`).
 - Scripts de build des dépendances : autorisés un par un dans `allowBuilds`
   (`onlyBuiltDependencies` est ignoré depuis pnpm 11).
-- La configuration ESLint partagée est dans `packages/config/eslint.js`
-  (`defineAdrConfig({ preset: "library" | "react" | "nest" | "docs" | "node" })`).
+- La configuration ESLint partagée est dans `packages/config/` : `eslint.js`
+  (`defineAdrConfig({ preset, documentation, optionalPeers })`), `eslint-presets.js`
+  (react, nest, docs), `eslint-imports.js` (imports profonds, peerDependencies optionnelles).
+- Scripts de dépendances refusés explicitement dans `allowBuilds` : `unrs-resolver`,
+  `@swc/core` (binaires natifs fournis par les dépendances optionnelles), `core-js` (message).
+- `overrides` : `eslint-plugin-tsdoc` est aligné sur la version de `@typescript-eslint/utils`
+  qui accepte TypeScript 6.
+- CI : `turbo run … --affected` ne relance que les projets touchés ; `tsconfig.base.json` est
+  une `globalDependency` de Turborepo (sa modification invalide tout le cache).
