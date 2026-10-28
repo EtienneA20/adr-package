@@ -10,6 +10,7 @@ import tsdoc from "eslint-plugin-tsdoc";
 import globals from "globals";
 import { configs as tsConfigs } from "typescript-eslint";
 
+import { importBoundaryConfigs } from "./eslint-imports.js";
 import { presetConfigs } from "./eslint-presets.js";
 
 /** @typedef {import("eslint").Linter.Config} Config */
@@ -19,12 +20,6 @@ const SOURCE_FILES = ["src/**/*.{ts,tsx}"];
 const TEST_FILES = ["**/*.test.{ts,tsx}"];
 const JS_FILES = ["**/*.{js,mjs,cjs}"];
 const CONFIG_FILES = ["*.config.{ts,js,mjs,cjs}", "eslint.config.js"];
-
-/**
- * Un import relatif qui descend de plus d'un niveau dans un dossier (`./a/b`, `../../a/b`)
- * contourne l'`index.ts` d'un élément ou d'une catégorie : c'est un import profond.
- */
-const DEEP_RELATIVE_IMPORT = String.raw`^\.{1,2}/(?:\.\./)*[^./][^/]*/.+`;
 
 /** @type {Config[]} */
 const ignores = [
@@ -215,18 +210,6 @@ const sourceConfigs = [
   {
     files: SOURCE_FILES,
     rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              regex: DEEP_RELATIVE_IMPORT,
-              message:
-                "Import profond interdit : importer via l'index.ts de l'élément ou de la catégorie.",
-            },
-          ],
-        },
-      ],
       "no-restricted-syntax": [
         "error",
         {
@@ -290,11 +273,20 @@ const toolingConfigs = [
  * Construit la configuration ESLint d'un projet du monorepo. Prettier est toujours appliqué en
  * dernier pour neutraliser les règles de mise en forme.
  *
- * @param {{ tsconfigRootDir: string; preset?: Preset; documentation?: boolean }} options -
- *   Dossier racine du projet, préréglage, et exigence de TSDoc (désactivée pour les apps).
+ * @param {object} options - Options du projet.
+ * @param {string} options.tsconfigRootDir - Dossier racine du projet (`import.meta.dirname`).
+ * @param {Preset} [options.preset] - Préréglage : library, react, nest, docs ou node.
+ * @param {boolean} [options.documentation] - Exiger le TSDoc (désactivé pour les apps).
+ * @param {import("./eslint-imports.js").OptionalPeer[]} [options.optionalPeers] -
+ *   PeerDependencies optionnelles et la seule zone de `src` autorisée à les importer.
  * @returns {Config[]} La configuration ESLint complète (flat config).
  */
-export function defineAdrConfig({ tsconfigRootDir, preset = "library", documentation = true }) {
+export function defineAdrConfig({
+  tsconfigRootDir,
+  preset = "library",
+  documentation = true,
+  optionalPeers = [],
+}) {
   return [
     ...ignores,
     ...typescriptConfigs(tsconfigRootDir),
@@ -302,6 +294,7 @@ export function defineAdrConfig({ tsconfigRootDir, preset = "library", documenta
     ...fileNamingConfigs,
     ...(documentation ? documentationConfigs : []),
     ...sourceConfigs,
+    ...importBoundaryConfigs(optionalPeers),
     ...presetConfigs[preset],
     ...testConfigs,
     ...toolingConfigs,

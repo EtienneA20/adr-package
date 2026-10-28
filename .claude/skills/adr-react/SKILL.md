@@ -17,10 +17,22 @@ Bibliothèque de composants et de hooks React (≥ 18) publiée sur GitHub Packa
   `@etiennea20/adr-react/fetch` (axios, @tanstack/react-query) et
   `@etiennea20/adr-react/routing` (react-router).
 - Tous les modules sont marqués `"use client"` (compatibles React Server Components).
+- Catégories : `content-display`, `form`, `ui`, `crud`, `filters` (point d'entrée principal),
+  `fetch` et `routing` (sous-chemins).
 
 ## Catégories
 
-_Aucun élément public pour l'instant._
+- `content-display` : affichage de contenu (aucun élément pour l'instant)
+- `form` : composants et hooks de formulaire (aucun élément pour l'instant)
+- [ui](reference.md#ui) : interface générique
+  - [`VisuallyHidden`](reference.md#visuallyhidden)
+  - [`IVisuallyHiddenProps`](reference.md#ivisuallyhiddenprops)
+- `crud` : utilitaires de modèle CRUD (aucun élément pour l'instant)
+- `filters` : méthodes de filtre (aucun élément pour l'instant)
+- `fetch` (`@etiennea20/adr-react/fetch`) : hooks de fetch, Axios, TanStack Query (aucun
+  élément pour l'instant)
+- `routing` (`@etiennea20/adr-react/routing`) : utilitaires de routing (aucun élément pour
+  l'instant)
 
 ## Retrouver un élément
 
