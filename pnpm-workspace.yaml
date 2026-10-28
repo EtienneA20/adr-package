@@ -9,6 +9,8 @@ allowBuilds:
   # Binaire natif déjà fourni par les dépendances optionnelles : le script de repli est inutile.
   unrs-resolver: false
   "@swc/core": false
+  # Message de financement uniquement.
+  core-js: false
 
 # Versions uniques partagées par tout le monorepo (`"typescript": "catalog:"`).
 catalog:

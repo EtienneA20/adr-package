@@ -56,6 +56,11 @@ const docsConfigs = [
     files: ["src/pages/**", "src/theme/**", "docusaurus.config.ts", "sidebars.ts"],
     rules: { "import-x/no-default-export": "off" },
   },
+  {
+    // Les surcharges du thème Docusaurus (swizzling) portent le nom PascalCase du composant.
+    files: ["src/theme/**"],
+    rules: { "check-file/folder-naming-convention": "off" },
+  },
 ];
 
 /** @type {Record<Preset, Config[]>} */

@@ -1,0 +1,75 @@
+---
+title: Routes publiques
+---
+
+# Routes publiques avec `Public`
+
+Dans une application où toutes les routes sont protégées par un guard global, le décorateur
+`Public()` marque les exceptions (santé, connexion, documentation…). Il pose la métadonnée
+`IS_PUBLIC_KEY`, que le guard lit avec le `Reflector`.
+
+## Exemple : application fictive « Bibliothèque »
+
+### 1. Le guard global lit la métadonnée
+
+```ts title="src/auth/auth.guard.ts"
+import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { IS_PUBLIC_KEY } from "@etiennea20/adr-nest";
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) return true;
+    return Boolean(context.switchToHttp().getRequest().user);
+  }
+}
+```
+
+### 2. Le guard est enregistré globalement
+
+```ts title="src/app.module.ts"
+import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { AuthGuard } from "./auth/auth.guard";
+import { BooksController } from "./books/books.controller";
+
+@Module({
+  controllers: [BooksController],
+  providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
+})
+export class AppModule {}
+```
+
+### 3. Les routes publiques sont marquées
+
+```ts title="src/books/books.controller.ts"
+import { Controller, Get, Post } from "@nestjs/common";
+import { Public } from "@etiennea20/adr-nest";
+
+@Controller("books")
+export class BooksController {
+  @Public() // le catalogue est consultable sans compte
+  @Get()
+  findAll() {
+    return [{ id: 1, title: "Les Misérables" }];
+  }
+
+  @Post() // l'ajout reste réservé aux utilisateurs connectés
+  create() {
+    return { id: 2 };
+  }
+}
+```
+
+Décorer la classe (`@Public()` au-dessus de `@Controller`) rend publiques toutes ses routes.
+
+## Voir aussi
+
+- `Public` et `IS_PUBLIC_KEY` dans la référence API.

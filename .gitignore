@@ -23,3 +23,6 @@ packages/*/skills
 # Système
 .DS_Store
 Thumbs.db
+
+# Référence API générée par docusaurus-plugin-typedoc
+apps/docs/docs/*/api

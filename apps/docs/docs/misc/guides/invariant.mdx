@@ -1,0 +1,34 @@
+---
+title: Garantir une hypothèse avec invariant
+---
+
+# Garantir une hypothèse avec `invariant`
+
+`invariant(condition, message)` lève une `Error` si la condition est fausse. TypeScript affine
+ensuite le type : après l'appel, la valeur n'est plus `undefined` ni `null`.
+
+## Exemple : application fictive « Bibliothèque »
+
+```ts title="src/loans/return-book.ts"
+import { invariant } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  id: string;
+  bookId: string;
+  returnedAt?: Date;
+}
+
+export function returnBook(loans: ILoan[], loanId: string, now: Date): ILoan {
+  const loan = loans.find((candidate) => candidate.id === loanId);
+  invariant(loan, `Emprunt ${loanId} introuvable`);
+  invariant(!loan.returnedAt, `L'emprunt ${loanId} est déjà rendu`);
+
+  return { ...loan, returnedAt: now };
+}
+```
+
+## Quand l'utiliser
+
+- Pour une hypothèse **interne** dont la violation est un bug (donnée censée exister).
+- Pas pour valider une saisie utilisateur : l'erreur levée est générique ; préférer une
+  validation qui renvoie un message adapté (ou une exception HTTP côté NestJS).

@@ -1,0 +1,54 @@
+---
+title: VisuallyHidden
+---
+
+# VisuallyHidden
+
+Masque visuellement un contenu tout en le laissant accessible aux lecteurs d'écran
+(technique « sr-only »). À utiliser pour nommer un bouton qui ne contient qu'une icône, ou pour
+ajouter une précision destinée uniquement aux technologies d'assistance.
+
+```tsx
+import { VisuallyHidden } from "@etiennea20/adr-react";
+```
+
+## Démo
+
+Le texte « Fermer la fenêtre » n'est pas visible, mais il donne son nom accessible au bouton
+(inspectez-le avec les outils d'accessibilité du navigateur).
+
+```jsx live
+function Demo() {
+  const [clicks, setClicks] = useState(0);
+  return (
+    <div>
+      <button type="button" onClick={() => setClicks(clicks + 1)}>
+        <span aria-hidden="true">×</span>
+        <VisuallyHidden>Fermer la fenêtre</VisuallyHidden>
+      </button>
+      <p>Clics : {clicks}</p>
+    </div>
+  );
+}
+```
+
+## Description accessible
+
+```jsx live
+<label>
+  Mot de passe <input type="password" aria-describedby="password-hint" />
+  <VisuallyHidden id="password-hint">12 caractères minimum</VisuallyHidden>
+</label>
+```
+
+## Props
+
+| Prop       | Type        | Obligatoire | Description                                                            |
+| ---------- | ----------- | ----------- | ---------------------------------------------------------------------- |
+| `children` | `ReactNode` | oui         | Contenu lu par les technologies d'assistance mais invisible à l'écran. |
+| `id`       | `string`    | non         | Identifiant HTML, pour `aria-describedby` ou `aria-labelledby`.        |
+
+## Quand ne pas l'utiliser
+
+Pour cacher un contenu à **tout le monde**, utiliser un rendu conditionnel : `VisuallyHidden`
+laisse le contenu dans l'arbre d'accessibilité.

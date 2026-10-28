@@ -1,0 +1,16 @@
+# Contexte Docker = racine du dépôt (voir apps/docs/Dockerfile).
+.git
+.github
+.husky
+.vscode
+.claude
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/.turbo
+**/.docusaurus
+apps/docs/docs/*/api
+packages/*/skills
+**/*.tsbuildinfo
+**/.env*

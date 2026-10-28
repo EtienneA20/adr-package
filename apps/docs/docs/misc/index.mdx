@@ -1,0 +1,20 @@
+---
+slug: /misc
+title: adr-misc
+sidebar_position: 1
+---
+
+# @etiennea20/adr-misc
+
+Utilitaires TypeScript partagés entre le front (navigateur) et le back (Node, NestJS) : parsing
+(dates avec dayjs, durées, nombres), utilitaires de base et énumérations. ESM et CJS, sans API
+propre à un environnement.
+
+```sh
+pnpm add @etiennea20/adr-misc dayjs
+```
+
+`dayjs` est une peerDependency : votre projet fournit l'instance (et ses plugins).
+
+- **Guides** : cas d'usage, avec un exemple d'application fictive.
+- **Référence API** : générée depuis le TSDoc du code source.
