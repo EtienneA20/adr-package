@@ -23,6 +23,8 @@
     "format:check": "prettier --check .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "check:skills": "node scripts/check-skills.mjs",
+    "install:skills": "node scripts/install-skills.mjs",
     "changeset": "changeset",
     "release": "turbo run build --filter=./packages/* && changeset publish",
     "prepare": "husky"

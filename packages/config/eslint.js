@@ -268,6 +268,12 @@ const toolingConfigs = [
       ...tsConfigs.disableTypeChecked.languageOptions,
       globals: globals.node,
     },
+    rules: {
+      ...tsConfigs.disableTypeChecked.rules,
+      // Faux positifs sur les modules CommonJS importés depuis l'ESM (ex. typescript).
+      "import-x/default": "off",
+      "import-x/no-named-as-default-member": "off",
+    },
   },
   {
     files: CONFIG_FILES,

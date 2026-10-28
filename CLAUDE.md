@@ -182,6 +182,67 @@ Contrôles automatiques : ESLint (`jsdoc/*`, `tsdoc/syntax`) exige description, 
 `@returns`, `@throws` (si le corps contient `throw`) et `@example` ; `pnpm check:skills`
 vérifie en plus `@since` et l'entrée dans `SKILLS.md` pour chaque export public.
 
+## SKILLS.md et skills Claude Code
+
+Chaque package publié a un `SKILLS.md` : l'inventaire de **tous** ses éléments publics, en
+français. C'est la **source de vérité** dont `pnpm run install:skills` dérive
+`.claude/skills/<package>/` (`SKILL.md` court + `reference.md`, copie de l'inventaire).
+
+Règles :
+
+- Tout ajout, modification ou suppression d'un élément public met à jour `SKILLS.md` **dans la
+  même PR**, puis `pnpm run install:skills`, et `.claude/skills/` est commité (le hook
+  pre-commit le fait automatiquement quand un `SKILLS.md` est indexé).
+- `.claude/skills/` est généré : ne jamais l'éditer à la main.
+- Deux contrôles distincts tournent en CI : `pnpm check:skills` (chaque export a un TSDoc
+  complet et une entrée cohérente dans `SKILLS.md`, et inversement) et
+  `pnpm run install:skills --check` (`.claude/skills/` est synchronisé avec les `SKILLS.md`).
+
+Format (strict, analysé par les scripts de `scripts/`) :
+
+```md
+---
+skill: adr-misc # nom du skill : minuscules et tirets
+description: >-
+  À utiliser pour … (dit QUAND utiliser le skill : nom du package, types d'éléments,
+  cas d'usage ; 1024 caractères max)
+---
+
+# SKILLS : @etiennea20/adr-misc
+
+## Introduction
+
+Rôle du package, périmètre (court : repris dans SKILL.md, limité à 150 lignes).
+
+## Table des matières
+
+- [core](#core) : utilitaires de base
+  - [`invariant`](#invariant)
+
+## core
+
+### `invariant`
+
+| Champ          | Valeur                                 |
+| -------------- | -------------------------------------- |
+| Catégorie      | `core`                                 |
+| Point d'entrée | `@etiennea20/adr-misc`                 |
+| Statut         | stable                                 |
+| Depuis         | 0.1.0                                  |
+| Source         | `src/core/invariant/invariant.ts`      |
+| Tests          | `src/core/invariant/invariant.test.ts` |
+
+**Signature**, **Description**, **Paramètres**, **Retour**, **Erreurs**, **Exemple**
+(blocs de texte libres sous le tableau).
+```
+
+- Une entrée par export public, titrée exactement `` ### `NomExporté` ``.
+- « Point d'entrée » : le spécificateur d'import (`@etiennea20/adr-react/fetch` pour un
+  sous-chemin).
+- « Statut » : `stable`, `expérimental` ou `déprécié` (`déprécié` ⇔ tag `@deprecated`).
+- « Depuis » : identique au tag `@since`.
+- « Source » et « Tests » : chemins relatifs au package, qui doivent exister.
+
 ## Tests (obligatoires pour tout élément public)
 
 - Vitest partout, un fichier `<element>.test.ts(x)` à côté de chaque élément.
