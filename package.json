@@ -24,13 +24,18 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "changeset": "changeset",
-    "release": "turbo run build --filter=./packages/* && changeset publish"
+    "release": "turbo run build --filter=./packages/* && changeset publish",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@etiennea20/config": "workspace:*",
     "eslint": "catalog:",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "prettier": "catalog:",
     "turbo": "^2.11.10",
     "typescript": "catalog:"
