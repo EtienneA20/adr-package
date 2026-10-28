@@ -1,0 +1,32 @@
+{
+  "name": "adr-react-monorepo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "release": "turbo build --filter=@adr/adr-react && changeset publish"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.16.1",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.16.1",
+  "type": "module",
+  "private": "true",
+  "devDependencies": {
+    "@changesets/cli": "^3.0.3",
+    "turbo": "^2.11.10",
+    "typescript": "^6.0.3"
+  }
+}
