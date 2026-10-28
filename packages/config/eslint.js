@@ -19,7 +19,7 @@ import { presetConfigs } from "./eslint-presets.js";
 const SOURCE_FILES = ["src/**/*.{ts,tsx}"];
 const TEST_FILES = ["**/*.test.{ts,tsx}"];
 const JS_FILES = ["**/*.{js,mjs,cjs}"];
-const CONFIG_FILES = ["*.config.{ts,js,mjs,cjs}", "eslint.config.js"];
+const CONFIG_FILES = ["*.config.{ts,mts,js,mjs,cjs}", "eslint.config.{js,mjs}"];
 
 /** @type {Config[]} */
 const ignores = [
@@ -83,7 +83,7 @@ function typescriptConfigs(tsconfigRootDir) {
     {
       languageOptions: {
         parserOptions: {
-          projectService: { allowDefaultProject: ["*.config.ts"] },
+          projectService: { allowDefaultProject: ["*.config.ts", "*.config.mts"] },
           tsconfigRootDir,
         },
       },
@@ -123,6 +123,8 @@ const importConfigs = [
       "import-x/no-duplicates": "error",
       "import-x/no-self-import": "error",
       "import-x/no-useless-path-segments": "error",
+      // Bruit sur les modules CommonJS (ex. typescript) ; TypeScript vérifie déjà les membres.
+      "import-x/no-named-as-default-member": "off",
     },
   },
 ];

@@ -41,6 +41,13 @@ const nestConfigs = [
       "max-params": ["error", 6],
     },
   },
+  {
+    files: ["**/*.test.ts"],
+    rules: {
+      // Les tests passent les méthodes de contrôleur au Reflector (`Ctrl.prototype.handler`).
+      "@typescript-eslint/unbound-method": "off",
+    },
+  },
 ];
 
 /** @type {Config[]} */

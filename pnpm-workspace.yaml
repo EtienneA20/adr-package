@@ -8,6 +8,7 @@ allowBuilds:
   esbuild: true
   # Binaire natif déjà fourni par les dépendances optionnelles : le script de repli est inutile.
   unrs-resolver: false
+  "@swc/core": false
 
 # Versions uniques partagées par tout le monorepo (`"typescript": "catalog:"`).
 catalog:
