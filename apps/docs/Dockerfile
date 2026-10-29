@@ -28,8 +28,10 @@ COPY --from=pruner /repo/out/json/ .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile
 COPY --from=pruner /repo/out/full/ .
-# Fichier racine hors workspace, ignoré par turbo prune mais étendu par chaque tsconfig.
+# Chemins racine hors workspace, ignorés par turbo prune : tsconfig.base.json (étendu par chaque
+# tsconfig) et scripts/ (install-skills.mjs, appelé par le script build:skills des packages).
 COPY --from=pruner /repo/tsconfig.base.json ./
+COPY --from=pruner /repo/scripts ./scripts
 RUN pnpm turbo run build --filter=@etiennea20/docs
 
 # --- Runtime : fichiers statiques servis par nginx, utilisateur non-root ------------------
