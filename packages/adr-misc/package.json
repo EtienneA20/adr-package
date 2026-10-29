@@ -1,6 +1,6 @@
 {
   "name": "@etiennea20/adr-misc",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Utilitaires partagés front et back : parsing (dayjs, temps), utilitaires de base, énumérations.",
   "license": "UNLICENSED",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@etiennea20/adr-react",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Composants et hooks React catégorisés : affichage de contenu, formulaires, interface, routing, CRUD, fetch, filtres.",
   "license": "UNLICENSED",
   "type": "module",

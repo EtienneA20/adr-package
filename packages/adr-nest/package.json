@@ -1,6 +1,6 @@
 {
   "name": "@etiennea20/adr-nest",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Utilitaires NestJS : méthodes avancées, gestion des droits, filtrage avancé, export Excel et JSON.",
   "license": "UNLICENSED",
   "type": "commonjs",
