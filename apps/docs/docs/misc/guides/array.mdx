@@ -1,0 +1,191 @@
+---
+title: Manipuler des tableaux
+sidebar_label: Tableaux
+sidebar_position: 6
+---
+
+# Manipuler des tableaux
+
+La catégorie `array` regroupe des fonctions **pures** de manipulation de tableaux : découper,
+regrouper, trier, dédoublonner, comparer deux listes, déplacer ou basculer un élément. Aucune ne
+modifie le tableau reçu : elles renvoient toujours un nouveau tableau (ou un nouvel objet), ce
+qui les rend sûres dans un état React, un store ou un service NestJS.
+
+À utiliser dès qu'un `reduce` ou une boucle `for` ne sert qu'à mettre en forme une liste. Les
+exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Regrouper et compter
+
+`groupBy` range les éléments par clé, `countBy` compte les éléments par clé et `keyBy` indexe
+une liste par identifiant. Le résultat est un objet `Partial<Record<K, …>>` : une clé sans
+élément est absente, ce que TypeScript oblige à gérer.
+
+```ts title="src/loans/loan-dashboard.ts"
+import { countBy, groupBy, keyBy } from "@etiennea20/adr-misc";
+
+interface IBook {
+  id: string;
+  title: string;
+  genre: "roman" | "essai" | "bd";
+}
+
+interface ILoan {
+  bookId: string;
+  memberId: string;
+  status: "ongoing" | "late" | "returned";
+}
+
+export function loanDashboard(books: IBook[], loans: ILoan[]) {
+  const booksById = keyBy(books, (book) => book.id);
+  const loansByMember = groupBy(loans, (loan) => loan.memberId);
+  const countsByStatus = countBy(loans, (loan) => loan.status);
+
+  return {
+    lateCount: countsByStatus.late ?? 0,
+    membersWithLoans: Object.keys(loansByMember).length,
+    titles: loans.map((loan) => booksById[loan.bookId]?.title ?? "Livre inconnu"),
+  };
+}
+```
+
+## Séparer une liste en deux
+
+`partition` remplace deux `filter` opposés. Avec un prédicat de type (`loan is …`), chacun des
+deux tableaux est typé précisément.
+
+```ts title="src/loans/split-loans.ts"
+import { partition } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  bookId: string;
+  returnedAt?: Date;
+}
+
+export function splitLoans(loans: ILoan[]) {
+  const [returned, ongoing] = partition(loans, (loan) => loan.returnedAt !== undefined);
+  return { returned, ongoing };
+}
+```
+
+## Trier sur plusieurs critères
+
+`sortBy` accepte un ou plusieurs critères : une fonction (tri croissant) ou un objet avec
+`by` et `direction` (`"asc"` ou `"desc"`). Le tri est stable, les chaînes suivent l'ordre
+alphabétique français (`Intl.Collator`, accents compris), les dates sont comparées par leur
+valeur, et `null`, `undefined` et `NaN` sont toujours placés en dernier.
+
+```ts title="src/books/sort-catalog.ts"
+import { sortBy } from "@etiennea20/adr-misc";
+
+interface IBook {
+  title: string;
+  author: string;
+  publishedAt?: Date;
+}
+
+export function sortCatalog(books: readonly IBook[]): IBook[] {
+  return sortBy(
+    books,
+    (book) => book.author,
+    { by: (book) => book.publishedAt, direction: "desc" },
+    (book) => book.title,
+  );
+}
+```
+
+## Dédoublonner et comparer deux listes
+
+`unique` dédoublonne des valeurs primitives, `uniqueBy` des objets selon une clé.
+`difference` et `intersection` comparent deux listes, avec une fonction de clé facultative pour
+les objets.
+
+```ts title="src/members/sync-reservations.ts"
+import { difference, intersection, uniqueBy } from "@etiennea20/adr-misc";
+
+interface IReservation {
+  bookId: string;
+  memberId: string;
+}
+
+export function syncReservations(current: IReservation[], wanted: IReservation[]) {
+  const byBook = (reservation: IReservation) => reservation.bookId;
+  const target = uniqueBy(wanted, byBook);
+  return {
+    toCreate: difference(target, current, byBook),
+    toCancel: difference(current, target, byBook),
+    unchanged: intersection(current, target, byBook),
+  };
+}
+```
+
+## Paginer, numéroter, associer
+
+`chunk` découpe une liste en lots (envoi par paquets, pagination côté client), `range` génère
+une suite de nombres et `zip` associe deux listes élément par élément.
+
+```ts title="src/books/print-labels.ts"
+import { chunk, range, zip } from "@etiennea20/adr-misc";
+
+export function labelSheets(titles: string[]): string[][] {
+  const numbers = range(1, titles.length + 1);
+  const labels = zip(numbers, titles).map(([number, title]) => `${number}. ${title}`);
+  return chunk(labels, 24);
+}
+```
+
+## Interface : sélection et ordre
+
+`toggleItem` ajoute ou retire un élément (cases à cocher, filtres), `moveItem` déplace un
+élément (glisser-déposer) et `compact` retire les valeurs falsy d'une liste construite
+conditionnellement.
+
+```ts title="src/members/reading-list.ts"
+import { compact, moveItem, toggleItem } from "@etiennea20/adr-misc";
+
+export function toggleGenre(selected: string[], genre: string): string[] {
+  return toggleItem(selected, genre);
+}
+
+export function moveUp(readingList: string[], index: number): string[] {
+  return index > 0 ? moveItem(readingList, index, index - 1) : readingList;
+}
+
+export function badgeClasses(isLate: boolean, isPremium: boolean): string {
+  return compact(["badge", isLate && "badge--late", isPremium && "badge--premium"]).join(" ");
+}
+```
+
+## Récapitulatif
+
+| Élément        | Rôle                                                                |
+| -------------- | ------------------------------------------------------------------- |
+| `chunk`        | Découpe un tableau en lots de taille fixe                           |
+| `compact`      | Retire les valeurs falsy (`null`, `undefined`, `false`, `0`, `""`…) |
+| `countBy`      | Compte les éléments par clé                                         |
+| `difference`   | Éléments du premier tableau absents du second                       |
+| `groupBy`      | Regroupe les éléments par clé                                       |
+| `intersection` | Éléments présents dans les deux tableaux                            |
+| `keyBy`        | Indexe les éléments par clé (le dernier l'emporte)                  |
+| `moveItem`     | Déplace un élément d'un index à un autre                            |
+| `partition`    | Sépare les éléments qui vérifient un prédicat des autres            |
+| `range`        | Génère une suite de nombres (fin exclue, pas configurable)          |
+| `sortBy`       | Trie sur un ou plusieurs critères, croissants ou décroissants       |
+| `toggleItem`   | Ajoute un élément absent ou retire un élément présent               |
+| `unique`       | Dédoublonne des valeurs (égalité `SameValueZero`)                   |
+| `uniqueBy`     | Dédoublonne selon une clé calculée (le premier l'emporte)           |
+| `zip`          | Associe deux tableaux élément par élément (longueur la plus courte) |
+
+Types associés : `SortByValue` (valeur comparable), `SortByCriterion` et `ISortByCriterion`
+(critère de tri).
+
+## Points d'attention
+
+- Les fonctions ne modifient jamais le tableau reçu, mais les éléments ne sont **pas** copiés :
+  un objet du résultat est le même objet que dans la liste d'origine.
+- `unique`, `difference`, `intersection` et `toggleItem` comparent par identité (`SameValueZero`).
+  Pour des objets, passer une fonction de clé (`(book) => book.id`), sinon deux objets
+  identiques en contenu restent distincts.
+- `chunk`, `moveItem` et `range` lèvent une `RangeError` sur des arguments invalides (taille
+  nulle, index hors limites, pas nul) : valider les entrées utilisateur avant l'appel.
+- Pour de très grandes listes ou des traitements en flux, préférer un traitement dédié (base de
+  données, pagination serveur) : ces fonctions travaillent en mémoire.
