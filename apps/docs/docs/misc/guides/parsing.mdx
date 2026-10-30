@@ -1,0 +1,246 @@
+---
+title: Lecture de saisies
+sidebar_label: Parsing
+sidebar_position: 12
+---
+
+# Lecture de saisies
+
+La catégorie `parsing` convertit des **textes saisis ou importés** en valeurs typées : nombres,
+entiers, booléens, dates, durées, JSON, et fichiers CSV dans les deux sens. Elle accepte les
+formats français (« 1 234,56 », « 15/01/2026 », « 1h30 », « Oui ») comme les formats
+anglais ou normalisés (ISO 8601), sans configuration.
+
+À utiliser à la frontière de l'application : formulaire, paramètre de requête, import de
+fichier, stockage local, réponse d'un service tiers. Les exemples ci-dessous sont tirés d'une
+application fictive « Bibliothèque ».
+
+## Convention : `undefined` plutôt qu'une exception
+
+Toutes les fonctions `parse*` et `safeJsonParse` renvoient `undefined` quand la saisie est vide
+ou invalide, au lieu de lever une erreur. On choisit ensuite, au cas par cas, une valeur par
+défaut avec `??` ou un message pour l'utilisateur.
+
+```ts title="src/books/read-copies-field.ts"
+import { parseInteger } from "@etiennea20/adr-misc";
+
+export function readCopiesField(input: string): number | string {
+  const copies = parseInteger(input);
+  if (copies === undefined || copies < 1) {
+    return "Indiquez un nombre d'exemplaires entier et positif.";
+  }
+  return copies;
+}
+
+readCopiesField("1 200"); // 1200
+readCopiesField("2,5"); // "Indiquez un nombre d'exemplaires entier et positif."
+```
+
+Seules `parseCsv` et `toCsv` lèvent une `RangeError`, et uniquement pour une erreur de
+programmation : un séparateur de plusieurs caractères, le guillemet ou un retour à la ligne.
+
+## Lire un nombre, un prix ou un pourcentage
+
+`parseNumber` reconnaît les espaces (y compris insécables, tels que produits par
+`Intl.NumberFormat`), la virgule ou le point décimal, les séparateurs de milliers, le signe et
+le `%` final. Un pourcentage est renvoyé sous forme de ratio.
+
+```ts title="src/acquisitions/read-price.ts"
+import { parseNumber } from "@etiennea20/adr-misc";
+
+parseNumber("12,90"); // 12.9
+parseNumber("1 234,56"); // 1234.56
+parseNumber("1,234.56"); // 1234.56 (format anglais)
+parseNumber("-15 %"); // -0.15 (remise)
+parseNumber("douze"); // undefined
+```
+
+« 1,234 » et « 1.234 » sont ambigus : ils sont lus comme décimaux (`1.234`). Pour un fichier
+dont on connaît le format, imposer le séparateur décimal :
+
+```ts title="src/acquisitions/read-supplier-price.ts"
+import { parseNumber } from "@etiennea20/adr-misc";
+
+// Le fournisseur exporte ses prix au format anglais.
+parseNumber("1,234", { decimalSeparator: "." }); // 1234
+```
+
+## Lire une case à cocher ou une colonne « Oui/Non »
+
+`parseBoolean` accepte `oui`/`non`, `vrai`/`faux`, `true`/`false`, `yes`/`no`, `o`/`n`,
+`1`/`0` et `on`/`off`, sans tenir compte de la casse.
+
+```ts title="src/members/read-newsletter-consent.ts"
+import { parseBoolean } from "@etiennea20/adr-misc";
+
+export function readNewsletterConsent(cell: string): boolean {
+  return parseBoolean(cell) ?? false;
+}
+
+readNewsletterConsent("Oui"); // true
+readNewsletterConsent("NON"); // false
+readNewsletterConsent(""); // false
+```
+
+## Lire une date
+
+`parseDate` lit d'abord l'ISO 8601, puis les formats français `DD/MM/YYYY`,
+`DD/MM/YYYY HH:mm` et `D/M/YYYY`, en mode strict : une date impossible est refusée au lieu
+d'être reportée au mois suivant. Le résultat est un objet dayjs.
+
+```ts title="src/loans/read-due-date.ts"
+import { parseDate } from "@etiennea20/adr-misc";
+
+parseDate("15/01/2026")?.format("YYYY-MM-DD"); // "2026-01-15"
+parseDate("2026-01-15T10:30:00Z")?.toISOString(); // "2026-01-15T10:30:00.000Z"
+parseDate("31/02/2026"); // undefined
+parseDate(""); // undefined (et non la date du jour)
+```
+
+Pour un autre format, passer la liste des formats dayjs à essayer :
+
+```ts title="src/imports/read-legacy-date.ts"
+import { parseDate } from "@etiennea20/adr-misc";
+
+parseDate("2026.01.15", ["YYYY.MM.DD"])?.date(); // 15
+```
+
+`parseDate` active le plugin dayjs `customParseFormat` sur l'instance dayjs du projet (l'appel
+est idempotent). Les dates sans décalage horaire sont lues dans le fuseau local.
+
+## Lire une durée
+
+`parseDuration` renvoie des millisecondes. Elle accepte les unités françaises et anglaises
+(« 3 semaines », « 1h30 », « 2j 3h », « 1 heure et 30 minutes »), l'horloge (« 1:30 ») et
+l'ISO 8601 (« P21D », « PT1H30M »).
+
+```ts title="src/loans/read-loan-period.ts"
+import { parseDuration } from "@etiennea20/adr-misc";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function readLoanPeriodInDays(input: string): number | undefined {
+  const duration = parseDuration(input);
+  return duration === undefined ? undefined : Math.round(duration / DAY_MS);
+}
+
+readLoanPeriodInDays("3 semaines"); // 21
+readLoanPeriodInDays("P21D"); // 21
+readLoanPeriodInDays("21"); // undefined (unité ambiguë)
+```
+
+## Relire du JSON sans `try`/`catch`
+
+`safeJsonParse` remplace `JSON.parse` pour une valeur dont le contenu n'est pas garanti. La
+valeur de repli est un paramètre, car `null` est un JSON valide.
+
+```ts title="src/catalog/load-saved-filters.ts"
+import { safeJsonParse } from "@etiennea20/adr-misc";
+
+interface ICatalogFilters {
+  genre?: string;
+  availableOnly: boolean;
+}
+
+const DEFAULT_FILTERS: ICatalogFilters = { availableOnly: false };
+
+export function loadSavedFilters(saved: string | null): ICatalogFilters {
+  return safeJsonParse(saved, DEFAULT_FILTERS) ?? DEFAULT_FILTERS;
+}
+```
+
+Le type n'est pas vérifié à l'exécution : valider la structure obtenue (garde de type, schéma)
+avant de s'y fier si la donnée vient de l'extérieur.
+
+## Importer un fichier CSV
+
+`parseCsv` gère les champs entre guillemets, les guillemets doublés, les retours à la ligne
+dans les champs, le BOM UTF-8 et les fins de ligne Windows. Le séparateur est détecté
+automatiquement (`;` pour un export Excel français). Avec `headers: true`, chaque ligne devient
+un objet indexé par les en-têtes. Les valeurs restent des chaînes : les convertir avec les
+autres fonctions de la catégorie.
+
+```ts title="src/members/import-members.ts"
+import { parseBoolean, parseCsv, parseDate } from "@etiennea20/adr-misc";
+
+interface IMemberImport {
+  name: string;
+  joinedAt: Date | undefined;
+  newsletter: boolean;
+}
+
+export function importMembers(fileContent: string): IMemberImport[] {
+  return parseCsv(fileContent, { headers: true }).map((row) => ({
+    name: row["Nom"] ?? "",
+    joinedAt: parseDate(row["Inscription"])?.toDate(),
+    newsletter: parseBoolean(row["Newsletter"]) ?? false,
+  }));
+}
+
+importMembers('Nom;Inscription;Newsletter\r\n"Dupont, Marie";15/01/2026;Oui');
+// [{ name: "Dupont, Marie", joinedAt: Date (15/01/2026), newsletter: true }]
+```
+
+## Exporter vers un tableur
+
+`toCsv` est l'inverse de `parseCsv`. Ses valeurs par défaut visent Excel en français :
+séparateur `;`, virgule décimale, fin de ligne `\r\n`. Les clés des objets deviennent les
+en-têtes (ou `columns` les choisit et les ordonne).
+
+```ts title="src/loans/export-overdue-loans.ts"
+import { toCsv } from "@etiennea20/adr-misc";
+
+interface IOverdueLoan {
+  title: string;
+  member: string;
+  daysLate: number;
+  fine: number;
+}
+
+export function exportOverdueLoans(loans: IOverdueLoan[]): string {
+  return toCsv(
+    loans.map((loan) => ({
+      Titre: loan.title,
+      Adhérent: loan.member,
+      "Jours de retard": loan.daysLate,
+      Pénalité: loan.fine,
+    })),
+    { bom: true, escapeFormulas: true },
+  );
+}
+
+exportOverdueLoans([{ title: "Germinal", member: "Dupont, Marie", daysLate: 4, fine: 1.2 }]);
+// "﻿Titre;Adhérent;Jours de retard;Pénalité\r\nGerminal;Dupont, Marie;4;1,2"
+```
+
+- `bom: true` est nécessaire pour qu'Excel affiche correctement les accents d'un fichier ouvert
+  par double-clic.
+- `escapeFormulas: true` neutralise les textes commençant par `=`, `+`, `-` ou `@` (injection
+  de formules) : à activer dès que les données ont été saisies par des utilisateurs.
+- Une `Date` est écrite en ISO 8601 : la formater en français avant l'appel si le fichier est
+  destiné à être lu tel quel.
+
+## Récapitulatif
+
+| Élément         | Rôle                                                                  |
+| --------------- | --------------------------------------------------------------------- |
+| `parseNumber`   | Nombre aux formats français et anglais, pourcentage en ratio          |
+| `parseInteger`  | Entier aux mêmes formats, décimal refusé                              |
+| `parseBoolean`  | Booléen depuis `oui`/`non`, `vrai`/`faux`, `1`/`0`, `on`/`off`…       |
+| `parseDate`     | Date dayjs depuis l'ISO 8601 ou un format français, en mode strict    |
+| `parseDuration` | Durée en millisecondes depuis « 1h30 », « 2j 3h », « 1:30 », ISO 8601 |
+| `safeJsonParse` | `JSON.parse` sans exception, avec valeur de repli                     |
+| `parseCsv`      | Lecture d'un CSV (RFC 4180) en lignes ou en objets                    |
+| `toCsv`         | Écriture d'un CSV (RFC 4180) pour Excel en français                   |
+
+## Points d'attention
+
+- Ces fonctions **lisent** des saisies ; pour afficher une valeur, utiliser les fonctions de
+  formatage, et pour valider un format métier (email, SIRET, IBAN), celles de validation.
+- Toujours traiter le cas `undefined` : c'est le signal d'une saisie invalide.
+- `parseNumber` ne devine pas l'intention derrière « 1,234 » : imposer `decimalSeparator`
+  quand le format de la source est connu.
+- `parseCsv` lit tout le contenu en mémoire : pour un fichier de plusieurs centaines de
+  mégaoctets, préférer une bibliothèque de lecture en flux.
+- `parseDuration` refuse un nombre seul (« 90 ») et les durées en mois ou en années, dont la
+  longueur varie.
