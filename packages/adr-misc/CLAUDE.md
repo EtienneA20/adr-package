@@ -4,8 +4,9 @@ Complète le `CLAUDE.md` racine (à lire d'abord), puis lire `SKILLS.md` de ce p
 
 ## Rôle
 
-Utilitaires partagés front et back : parsing (dates avec dayjs, durées, nombres), utilitaires
-de base, énumérations. Consommé par des applications React et par `@etiennea20/adr-nest` côté
+Utilitaires partagés front et back : assertions, gardes et types utilitaires, asynchrone,
+tableaux, objets, chaînes, calculs, parsing et formatage français (dates avec dayjs, durées,
+nombres), dates (jours fériés, jours ouvrés), énumérations, validation, URL, fichiers, couleurs. Consommé par des applications React et par `@etiennea20/adr-nest` côté
 serveur.
 
 ## Contraintes d'environnement
@@ -38,14 +39,38 @@ serveur.
 
 ## Catégories
 
-| Dossier        | Contenu                                                                    |
-| -------------- | -------------------------------------------------------------------------- |
-| `src/core/`    | Utilitaires de base : assertions, garde-fous, helpers génériques typés     |
-| `src/parsing/` | Parsing et formatage : dates (dayjs), durées, nombres                      |
-| `src/enums/`   | Énumérations `as const` préfixées par `E` + type du même nom (voir racine) |
+| Dossier           | Contenu                                                                    |
+| ----------------- | -------------------------------------------------------------------------- |
+| `src/core/`       | Assertions (`invariant`, `assertNever`…) et gestion d'erreurs (`Result`)   |
+| `src/guards/`     | Gardes de type (`isDefined`, `isPlainObject`…)                             |
+| `src/types/`      | Types utilitaires uniquement (`DeepPartial`, `Brand`…)                     |
+| `src/function/`   | Fonctions d'ordre supérieur (`once`, `memoize`, `pipe`…)                   |
+| `src/async/`      | Promesses et minuteries (`retry`, `debounce`, `withTimeout`…)              |
+| `src/array/`      | Tableaux, toujours immuables (`chunk`, `groupBy`, `sortBy`…)               |
+| `src/object/`     | Objets, toujours immuables (`pick`, `deepMerge`, `isEqual`…)               |
+| `src/string/`     | Chaînes : recherche, troncature, échappement, pluriel français             |
+| `src/case/`       | Changement de casse (`toCamelCase`, `toKebabCase`…)                        |
+| `src/math/`       | Calculs numériques (`clamp`, `round`, `median`…)                           |
+| `src/random/`     | Aléatoire à générateur injectable, UUID                                    |
+| `src/parsing/`    | Lecture de saisies : nombres, booléens, dates (dayjs), durées, JSON, CSV   |
+| `src/format/`     | Formatage français : nombres, monnaie, dates, durées, tailles, téléphone   |
+| `src/date/`       | Calculs de dates (dayjs) : jours fériés, jours ouvrés, semaine ISO, âge    |
+| `src/enums/`      | Énumérations `as const` préfixées par `E` + type du même nom (voir racine) |
+| `src/validation/` | Prédicats de validation : email, téléphone, SIRET, IBAN, NIR, mot de passe |
+| `src/url/`        | Query strings et assemblage d'URL (sans `URL`, absent de la lib ES2022)    |
+| `src/file/`       | Noms de fichiers et types MIME (aucune API de système de fichiers)         |
+| `src/color/`      | Couleurs hexadécimales, mélange, contraste WCAG                            |
 
 Une catégorie n'est créée (dossier + `index.ts` + réexport dans `src/index.ts`) qu'avec son
 premier élément. Si une catégorie dépasse une quinzaine d'éléments, proposer de la diviser.
+
+- **Aucun import entre catégories** (sauf besoin réel, à justifier) : chaque catégorie reste
+  autonome et lisible seule.
+- Les globales communes au navigateur et à Node mais absentes de la lib ES2022 (minuteries,
+  `crypto`) passent par un helper privé typé sur `globalThis` (`src/async/timers/`,
+  `src/random/crypto/`), lu à chaque appel pour rester compatible avec `vi.useFakeTimers()`.
+- Ce qui dépend de l'heure courante accepte une date de référence ; ce qui est aléatoire
+  accepte un générateur `random: () => number` (défaut `Math.random`).
 
 ## Tests
 
