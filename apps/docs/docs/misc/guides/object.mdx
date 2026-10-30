@@ -1,0 +1,205 @@
+---
+title: Manipuler des objets
+sidebar_label: Objets
+sidebar_position: 7
+---
+
+# Manipuler des objets
+
+La catégorie `object` regroupe des fonctions **pures** de manipulation d'objets : sélectionner
+ou retirer des clés, transformer les valeurs, lire et écrire à un chemin pointé, cloner,
+fusionner, comparer en profondeur, aplatir et reconstruire. Aucune ne modifie l'objet reçu :
+elles renvoient toujours un nouvel objet, ce qui les rend sûres dans un état React, un reducer
+ou un service NestJS.
+
+À utiliser dès qu'une copie, une fusion ou une comparaison d'objets ne doit pas toucher à
+l'original. Les exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Choisir les champs à envoyer
+
+`pick` garde les clés listées, `omit` retire les clés listées ; les types du résultat suivent
+(`Pick` et `Omit`). `pickBy` et `omitBy` choisissent selon la valeur, et `removeUndefined`
+retire les clés `undefined` (une clé absente n'a pas le même sens qu'une clé à `undefined`
+pour un `PATCH`).
+
+```ts title="src/members/member-payload.ts"
+import { omit, omitBy, pick, removeUndefined } from "@etiennea20/adr-misc";
+
+interface IMember {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  phone?: string;
+}
+
+export function toPublicMember(member: IMember) {
+  return omit(member, ["passwordHash"]);
+}
+
+export function toContactCard(member: IMember) {
+  return pick(member, ["name", "email", "phone"]);
+}
+
+export function toPatch(changes: Partial<IMember>) {
+  return removeUndefined(changes);
+}
+
+export function nonEmptyFilters(filters: Record<string, string>) {
+  return omitBy(filters, (value) => value.trim() === "");
+}
+```
+
+## Transformer et parcourir
+
+`mapValues` transforme toutes les valeurs en gardant les clés ; `typedEntries` remplace
+`Object.entries` avec des clés typées `keyof T` ; `invert` retrouve une clé à partir de sa
+valeur, typiquement pour une énumération `as const`.
+
+```ts title="src/loans/loan-stats.ts"
+import { invert, mapValues, typedEntries } from "@etiennea20/adr-misc";
+
+const ELoanStatus = { ONGOING: "ongoing", LATE: "late", RETURNED: "returned" } as const;
+const statusNames = invert(ELoanStatus);
+
+export function statusName(code: "ongoing" | "late" | "returned"): string {
+  return statusNames[code];
+}
+
+export function toPercentages(counts: Record<string, number>, total: number) {
+  return mapValues(counts, (count) => Math.round((count / total) * 100));
+}
+
+export function describeCounts(counts: { ongoing: number; late: number }): string[] {
+  return typedEntries(counts).map(([status, count]) => `${status} : ${count}`);
+}
+```
+
+## Lire et écrire une propriété profonde
+
+`getPath` lit une valeur à partir d'un chemin pointé (`"author.address.city"`,
+`"items.0.title"`) sans erreur si un parent manque, avec une valeur par défaut facultative.
+`setPath` renvoie une copie avec la valeur écrite : seuls les objets du chemin sont recopiés,
+le reste est partagé (idéal dans un reducer). Avec un chemin littéral, le type de la valeur est
+déduit et vérifié (`PathValue`).
+
+```ts title="src/books/book-form-reducer.ts"
+import { getPath, setPath } from "@etiennea20/adr-misc";
+
+interface IBookForm {
+  title: string;
+  author: { name: string; country?: string };
+  copies: { barcode: string }[];
+}
+
+export function authorCountry(form: IBookForm): string {
+  return getPath(form, "author.country", "Inconnu");
+}
+
+export function renameAuthor(form: IBookForm, name: string): IBookForm {
+  return setPath(form, "author.name", name);
+}
+```
+
+## Copier, fusionner, comparer
+
+`deepClone` crée une copie indépendante (dates, `Map`, `Set` et références circulaires
+compris). `deepMerge` applique des réglages partiels sur des valeurs par défaut : les objets
+simples sont fusionnés, les tableaux et les dates remplacent la valeur. `isEqual` compare deux
+valeurs en profondeur, par exemple pour savoir si un formulaire a changé.
+
+```ts title="src/settings/library-settings.ts"
+import { type DeepMergePatch, deepClone, deepMerge, isEqual } from "@etiennea20/adr-misc";
+
+interface ISettings {
+  loans: { maxDays: number; maxBooks: number };
+  genres: string[];
+}
+
+const DEFAULT_SETTINGS: ISettings = {
+  loans: { maxDays: 21, maxBooks: 5 },
+  genres: ["roman", "essai"],
+};
+
+export function loadSettings(saved: DeepMergePatch<ISettings>): ISettings {
+  return deepMerge(DEFAULT_SETTINGS, saved);
+}
+
+export function startEditing(settings: ISettings): ISettings {
+  return deepClone(settings);
+}
+
+export function hasChanges(initial: ISettings, draft: ISettings): boolean {
+  return !isEqual(initial, draft);
+}
+```
+
+Le type `DeepMergePatch` décrit la valeur partielle acceptée par `deepMerge` : il type
+directement des réglages enregistrés, comme `saved` ci-dessus.
+
+## Passer par un format plat
+
+`flattenObject` transforme un objet imbriqué en clés pointées (export CSV, champs de
+formulaire nommés `author.name`), et `unflattenObject` fait l'inverse. Les chemins dangereux
+(`__proto__`, `constructor`, `prototype`) sont ignorés à la reconstruction.
+
+```ts title="src/books/book-csv.ts"
+import { flattenObject, unflattenObject } from "@etiennea20/adr-misc";
+
+interface IBook {
+  title: string;
+  author: { name: string };
+  tags: string[];
+}
+
+export function toCsvRow(book: IBook): Record<string, unknown> {
+  return flattenObject(book);
+  // { title: "Germinal", "author.name": "Zola", "tags.0": "roman" }
+}
+
+export function fromFormFields(fields: Record<string, string>): Record<string, unknown> {
+  return unflattenObject(fields);
+}
+```
+
+## Récapitulatif
+
+| Élément           | Rôle                                                                 |
+| ----------------- | -------------------------------------------------------------------- |
+| `deepClone`       | Copie profonde (objets simples, tableaux, dates, `Map`, `Set`)       |
+| `deepMerge`       | Fusion récursive de réglages partiels dans une copie de la cible     |
+| `flattenObject`   | Aplatit un objet en clés pointées                                    |
+| `getPath`         | Lit une valeur à un chemin pointé, avec valeur par défaut            |
+| `invert`          | Inverse clés et valeurs                                              |
+| `isEqual`         | Compare deux valeurs en profondeur                                   |
+| `mapValues`       | Transforme les valeurs en gardant les clés                           |
+| `omit`            | Copie sans les clés listées                                          |
+| `omitBy`          | Copie sans les propriétés qui vérifient un prédicat                  |
+| `pick`            | Copie avec seulement les clés listées                                |
+| `pickBy`          | Copie avec seulement les propriétés qui vérifient un prédicat        |
+| `removeUndefined` | Copie sans les clés `undefined` (option `deep`)                      |
+| `setPath`         | Copie avec une valeur écrite à un chemin pointé (partage structurel) |
+| `typedEntries`    | `Object.entries` avec des clés et des valeurs typées                 |
+| `unflattenObject` | Reconstruit un objet imbriqué à partir de clés pointées              |
+
+Types associés : `DeepMergePatch` (réglages partiels de `deepMerge`), `PathValue` (type de la
+valeur à un chemin), `ObjectEntry` (paire typée de `typedEntries`) et
+`IRemoveUndefinedOptions` (options de `removeUndefined`).
+
+## Points d'attention
+
+- Seules les propriétés **propres, énumérables et à clé chaîne** sont parcourues ; les clés
+  symboles sont ignorées.
+- `pick`, `omit`, `pickBy`, `omitBy` et `mapValues` font une copie **superficielle** : un objet
+  imbriqué du résultat est le même que dans l'original. Utiliser `deepClone` pour une copie
+  indépendante.
+- `deepClone`, `deepMerge` et `setPath` sont pensés pour des objets simples et des tableaux :
+  une instance de classe est reprise par référence (`deepClone`, `deepMerge`) ou perd son
+  prototype si elle est sur le chemin (`setPath`).
+- `setPath` lève une `Error` si un segment du chemin vaut `__proto__`, `constructor` ou
+  `prototype` ; `deepMerge` et `unflattenObject` ignorent ces clés (protection contre la
+  pollution de prototype, par exemple avec des données issues de `JSON.parse`).
+- `typedEntries` suppose que l'objet n'a pas d'autres propriétés que celles de son type :
+  TypeScript ne le garantit pas pour un objet qui vient de l'extérieur.
+- `flattenObject` ne supporte pas les références circulaires, et une clé qui contient le
+  séparateur ne peut pas être reconstruite par `unflattenObject` ni lue par `getPath`.
