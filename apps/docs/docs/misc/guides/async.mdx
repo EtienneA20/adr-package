@@ -1,0 +1,178 @@
+---
+title: Utilitaires asynchrones
+sidebar_label: Asynchrone
+sidebar_position: 5
+---
+
+# Utilitaires asynchrones
+
+La catégorie `async` regroupe des utilitaires pour **maîtriser le temps et les promesses** :
+pause, délai maximal, relance en cas d'échec, attente d'une condition, limitation du nombre
+d'appels simultanés, et limitation de la fréquence d'un rappel (`debounce`, `throttle`).
+
+Ils fonctionnent dans le navigateur comme dans Node, et restent compatibles avec
+`vi.useFakeTimers()` dans les tests. Les exemples ci-dessous sont tirés d'une application
+fictive « Bibliothèque ».
+
+## Relancer un appel qui échoue avec `retry`
+
+`retry` relance une opération asynchrone avec un délai croissant (100 ms, puis 200 ms, puis
+400 ms… par défaut). `shouldRetry` limite les relances aux erreurs passagères : relancer une
+erreur de validation ne sert à rien.
+
+```ts title="src/catalog/fetch-books.ts"
+import { retry } from "@etiennea20/adr-misc";
+
+export function fetchBooks(): Promise<IBook[]> {
+  return retry(() => api.get<IBook[]>("/books"), {
+    attempts: 4,
+    delayMs: 500,
+    maxDelayMs: 3000,
+    shouldRetry: (error) => isNetworkError(error),
+    onRetry: (error, attempt, delayMs) => {
+      logger.warn(`Tentative ${attempt} échouée, nouvel essai dans ${delayMs} ms`);
+    },
+  });
+}
+```
+
+## Limiter la durée d'attente avec `withTimeout`
+
+`withTimeout` rejette avec une `TimeoutError` si la promesse n'est pas réglée à temps. Tester
+`instanceof TimeoutError` permet d'afficher un message adapté.
+
+```ts title="src/catalog/load-catalog-page.ts"
+import { TimeoutError, withTimeout } from "@etiennea20/adr-misc";
+
+export async function loadCatalogPage(): Promise<IBook[]> {
+  try {
+    return await withTimeout(api.get<IBook[]>("/books"), 5000);
+  } catch (error) {
+    if (error instanceof TimeoutError) {
+      showToast("Le catalogue met trop de temps à répondre.");
+      return [];
+    }
+    throw error;
+  }
+}
+```
+
+## Attendre la fin d'un traitement avec `waitUntil`
+
+`waitUntil` vérifie une condition (synchrone ou asynchrone) à intervalle régulier, jusqu'à ce
+qu'elle soit vraie ou que le délai expire.
+
+```ts title="src/catalog/import-catalog.ts"
+import { waitUntil } from "@etiennea20/adr-misc";
+
+export async function importCatalog(file: Blob): Promise<void> {
+  await api.post("/catalog/imports", file);
+  await waitUntil(async () => (await api.get<IImportStatus>("/catalog/imports/last")).done, {
+    timeoutMs: 60_000,
+    intervalMs: 2000,
+    message: "L'import du catalogue n'est pas terminé après une minute.",
+  });
+}
+```
+
+## Traiter une liste par lots avec `mapConcurrent` et `sleep`
+
+`mapConcurrent` remplace `Promise.all(items.map(...))` quand tout lancer d'un coup
+surchargerait le serveur : au plus `concurrency` appels sont en cours, et les résultats
+gardent l'ordre de la liste. `sleep` introduit une pause entre deux appels successifs.
+
+```ts title="src/members/send-reminders.ts"
+import { mapConcurrent, sleep } from "@etiennea20/adr-misc";
+
+export function downloadCovers(books: IBook[]): Promise<Blob[]> {
+  return mapConcurrent(books, (book) => api.get<Blob>(`/books/${book.id}/cover`), 4);
+}
+
+export async function sendReminders(lateMembers: IMember[]): Promise<void> {
+  for (const member of lateMembers) {
+    await sendReminder(member);
+    await sleep(200); // ne pas saturer le serveur de messagerie
+  }
+}
+```
+
+## Limiter la fréquence d'un rappel avec `debounce` et `throttle`
+
+`debounce` attend la fin d'une rafale d'appels et n'exécute que le dernier (recherche pendant
+la saisie). `throttle` exécute le premier appel tout de suite, puis au plus un appel par
+fenêtre (suivi de progression, défilement).
+
+```ts title="src/search/book-search.ts"
+import { debounce, throttle } from "@etiennea20/adr-misc";
+
+export const searchBooks = debounce((query: string) => {
+  void loadResults(query);
+}, 300);
+
+searchBooks("ger");
+searchBooks("germinal"); // seul cet appel est exécuté, 300 ms plus tard
+
+export const reportProgress = throttle((percent: number) => {
+  void api.post("/imports/progress", { percent });
+}, 1000);
+
+// Au démontage d'un composant ou avant de quitter la page :
+searchBooks.cancel(); // ou searchBooks.flush() pour exécuter l'appel en attente
+reportProgress.cancel();
+```
+
+## Régler une promesse de l'extérieur avec `createDeferred`
+
+`createDeferred` expose `resolve` et `reject` : utile quand la promesse est réglée par un
+autre code que celui qui la crée, comme une fenêtre de confirmation.
+
+```ts title="src/loans/confirm-extension.ts"
+import { createDeferred } from "@etiennea20/adr-misc";
+
+export function askConfirmation(message: string): Promise<boolean> {
+  const deferred = createDeferred<boolean>();
+  openDialog({
+    message,
+    onConfirm: () => deferred.resolve(true),
+    onCancel: () => deferred.resolve(false),
+  });
+  return deferred.promise;
+}
+
+if (await askConfirmation("Prolonger l'emprunt de 15 jours ?")) {
+  await extendLoan(loanId);
+}
+```
+
+## Récapitulatif
+
+| Élément              | Rôle                                                                  |
+| -------------------- | --------------------------------------------------------------------- |
+| `sleep`              | Promesse résolue après un délai                                       |
+| `withTimeout`        | Rejette avec une `TimeoutError` si une promesse dépasse un délai      |
+| `TimeoutError`       | Erreur de dépassement de délai, à tester avec `instanceof`            |
+| `retry`              | Relance une opération qui échoue, avec un délai croissant             |
+| `IRetryOptions`      | Options de `retry` : tentatives, délais, filtre, rappel avant relance |
+| `waitUntil`          | Attend qu'une condition soit vraie, avec un délai maximal             |
+| `IWaitUntilOptions`  | Options de `waitUntil` : délai, intervalle, message                   |
+| `mapConcurrent`      | `map` asynchrone avec un nombre maximal d'appels simultanés           |
+| `debounce`           | N'exécute que le dernier appel d'une rafale                           |
+| `IDebouncedFunction` | Fonction renvoyée par `debounce`, avec `cancel()` et `flush()`        |
+| `throttle`           | Exécute au plus un appel par fenêtre de temps                         |
+| `IThrottledFunction` | Fonction renvoyée par `throttle`, avec `cancel()`                     |
+| `createDeferred`     | Crée une promesse réglée de l'extérieur                               |
+| `IDeferred`          | Objet `promise`, `resolve`, `reject` renvoyé par `createDeferred`     |
+
+## Points d'attention
+
+- `withTimeout` n'**annule pas** l'opération d'origine, seulement l'attente : la requête
+  continue en arrière-plan. Utiliser un `AbortController` pour l'interrompre réellement.
+- `mapConcurrent` est rejetée à la première erreur, comme `Promise.all` ; les appels déjà en
+  cours ne sont pas interrompus. Pour collecter toutes les erreurs, faire renvoyer un résultat
+  par `mapper` (avec `tryCatchAsync` par exemple).
+- Avec `retry`, garder `attempts` et `maxDelayMs` raisonnables côté interface : l'utilisateur
+  attend pendant toutes les tentatives.
+- Appeler `cancel()` sur une fonction issue de `debounce` ou `throttle` au démontage d'un
+  composant, sinon un appel en attente peut s'exécuter après coup.
+- Toutes les durées sont en millisecondes et doivent être des nombres finis positifs ou nuls
+  (sinon `RangeError`).
