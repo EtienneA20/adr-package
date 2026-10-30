@@ -1,0 +1,117 @@
+---
+title: Noms de fichiers et types MIME
+sidebar_label: Fichiers
+sidebar_position: 18
+---
+
+# Noms de fichiers et types MIME
+
+La catégorie `file` manipule des **noms et chemins de fichiers sous forme de texte** : extraire
+le nom ou l'extension, changer l'extension, produire un nom valide à partir d'une saisie et
+déduire un type MIME. Elle n'accède jamais au système de fichiers : les mêmes fonctions servent
+dans le navigateur (formulaire de téléversement) et côté serveur (export, téléchargement).
+
+Les chemins Unix (`/`) et Windows (`\`) sont acceptés indifféremment. Les exemples ci-dessous
+sont tirés d'une application fictive « Bibliothèque ».
+
+## Lire un nom de fichier
+
+`getFileName` retire le dossier, `getFileBaseName` retire en plus la dernière extension et
+`getFileExtension` renvoie cette extension en minuscules. Seule la **dernière** extension compte
+(`archive.tar.gz` a pour extension `gz`), et un fichier caché comme `.env` n'a pas d'extension.
+
+```ts title="src/books/cover-upload.ts"
+import { getFileBaseName, getFileExtension, getFileName } from "@etiennea20/adr-misc";
+
+const ALLOWED_COVER_EXTENSIONS = ["jpg", "jpeg", "png", "webp"];
+
+export interface ICoverUpload {
+  fileName: string;
+  defaultTitle: string;
+}
+
+export function readCoverUpload(path: string): ICoverUpload {
+  const extension = getFileExtension(path);
+  if (!ALLOWED_COVER_EXTENSIONS.includes(extension)) {
+    throw new Error(`Format de couverture non pris en charge : ${extension || "aucun"}`);
+  }
+  return {
+    fileName: getFileName(path), // "Le-Petit-Prince.JPG"
+    defaultTitle: getFileBaseName(path), // "Le-Petit-Prince"
+  };
+}
+```
+
+## Nommer un fichier exporté
+
+`sanitizeFileName` transforme un texte libre (titre d'un livre, nom d'un adhérent) en nom
+valide sous Windows, macOS et Linux : caractères interdits remplacés, points et espaces finaux
+retirés, noms réservés par Windows (`CON`, `NUL`…) préfixés, longueur limitée à 255 caractères
+en conservant l'extension. `changeFileExtension` nomme ensuite la version convertie d'un
+fichier.
+
+```ts title="src/loans/export-overdue-loans.ts"
+import { changeFileExtension, sanitizeFileName } from "@etiennea20/adr-misc";
+
+export function overdueLoansFileName(memberName: string, date: string): string {
+  // "Dupont / Martin" le "29/10/2026" donne "Retards - Dupont _ Martin - 29-10-2026.csv"
+  const safeDate = sanitizeFileName(date, { replacement: "-" });
+  return sanitizeFileName(`Retards - ${memberName} - ${safeDate}.csv`);
+}
+
+export function pdfVersionOf(fileName: string): string {
+  return changeFileExtension(fileName, "pdf"); // "exports/retards.csv" donne "exports/retards.pdf"
+}
+```
+
+`sanitizeFileName` lève une `RangeError` si le caractère de remplacement est lui-même interdit
+(`"/"`, `"?"`…) ou si `maxLength` n'est pas un entier strictement positif.
+
+## Servir un fichier avec le bon type MIME
+
+`getMimeType` déduit le type MIME de l'extension (`application/octet-stream` si elle est
+inconnue) ; `isImageFile` indique si ce type est une image, par exemple pour afficher un aperçu
+plutôt qu'une icône.
+
+```ts title="src/attachments/attachment-view.ts"
+import { getFileName, getMimeType, isImageFile } from "@etiennea20/adr-misc";
+
+export interface IAttachmentView {
+  label: string;
+  contentType: string;
+  preview: "image" | "icon";
+}
+
+export function toAttachmentView(path: string): IAttachmentView {
+  return {
+    label: getFileName(path),
+    contentType: getMimeType(path), // "application/pdf" pour "reglement.pdf"
+    preview: isImageFile(path) ? "image" : "icon",
+  };
+}
+```
+
+## Récapitulatif
+
+| Élément                    | Rôle                                                            |
+| -------------------------- | --------------------------------------------------------------- |
+| `getFileName`              | Nom du fichier avec son extension, sans le dossier              |
+| `getFileBaseName`          | Nom du fichier sans dossier ni dernière extension               |
+| `getFileExtension`         | Dernière extension, en minuscules et sans le point              |
+| `changeFileExtension`      | Remplace, ajoute ou retire l'extension en conservant le dossier |
+| `sanitizeFileName`         | Rend un texte libre utilisable comme nom de fichier             |
+| `ISanitizeFileNameOptions` | Options de `sanitizeFileName` : remplacement, longueur maximale |
+| `getMimeType`              | Type MIME déduit de l'extension                                 |
+| `isImageFile`              | Indique si l'extension correspond à une image                   |
+
+## Points d'attention
+
+- **Le contenu n'est jamais examiné** : `getMimeType` et `isImageFile` se fient au nom. Un
+  fichier renommé en `.jpg` passe le contrôle ; pour la sécurité d'un téléversement, vérifier le
+  contenu côté serveur (signature du fichier, antivirus).
+- **La liste des types MIME est volontairement courte** (documents, images, audio, vidéo,
+  polices, archives, web). Pour un type rare, compléter côté application.
+- **`sanitizeFileName` traite un nom, pas un chemin** : `/` et `\` sont remplacés. Assainir
+  chaque segment séparément si besoin.
+- La longueur limite de `sanitizeFileName` se compte en caractères ; certains systèmes de
+  fichiers limitent en octets, ce qui compte davantage pour les caractères accentués.
