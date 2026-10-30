@@ -1,0 +1,175 @@
+---
+title: Calculs de dates
+sidebar_label: Dates
+sidebar_position: 14
+---
+
+# Calculs de dates
+
+La catégorie `date` regroupe les calculs calendaires courants dans une application française :
+jours fériés, jours ouvrés, semaines ISO, âge, année scolaire, périodes. Elle s'appuie sur
+`dayjs` (peerDependency du package) sans activer de plugin ni charger de locale : les
+résultats ne dépendent pas de la configuration dayjs du projet.
+
+Conventions communes :
+
+- Les entrées acceptent tout ce qu'accepte `dayjs()` (chaîne ISO, `Date`, timestamp, instance
+  `Dayjs`) ; les dates renvoyées sont des instances `Dayjs`.
+- Une date invalide lève une `Error` au message en français, au lieu de produire `NaN` ou
+  « Invalid Date » en silence.
+- Les calculs se font en **heure locale**, au jour près sauf mention contraire.
+- Ce qui dépend du jour courant (`getAge`, `getSchoolYear`) accepte une date de référence : la
+  passer explicitement dans les tests.
+
+Les exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Échéance d'un emprunt en jours ouvrés
+
+Un emprunt se rend sous 10 jours ouvrés : `addBusinessDays` saute les week-ends et les jours
+fériés français. `countBusinessDays` mesure ensuite le retard, bornes incluses.
+
+```ts title="src/loans/loan-due-date.ts"
+import { addBusinessDays, countBusinessDays, toIsoDate } from "@etiennea20/adr-misc";
+import type { Dayjs } from "dayjs";
+
+const LOAN_BUSINESS_DAYS = 10;
+
+export function getLoanDueDate(borrowedAt: Date): Dayjs {
+  return addBusinessDays(borrowedAt, LOAN_BUSINESS_DAYS);
+}
+
+export function getLateBusinessDays(dueDate: Dayjs, returnedAt: Date): number {
+  if (!dueDate.isBefore(returnedAt, "day")) {
+    return 0;
+  }
+  // Le jour d'échéance lui-même n'est pas un jour de retard.
+  return countBusinessDays(dueDate.add(1, "day"), returnedAt);
+}
+
+export function toLoanPayload(borrowedAt: Date): { dueDate: string } {
+  // « YYYY-MM-DD » sans décalage UTC, pour une colonne SQL de type date.
+  return { dueDate: toIsoDate(getLoanDueDate(borrowedAt)) };
+}
+```
+
+Pour une médiathèque d'Alsace ou de Moselle, passer `{ alsaceMoselle: true }` à chaque
+fonction : le Vendredi saint et la Saint-Étienne deviennent fériés.
+
+## Calendrier des fermetures
+
+`getPublicHolidaysFr` liste les 11 jours fériés de métropole, triés par date. `isWeekend`,
+`isPublicHolidayFr` et `isBusinessDay` testent un jour donné.
+
+```ts title="src/opening/closing-days.ts"
+import { getPublicHolidaysFr, isBusinessDay, isWeekend } from "@etiennea20/adr-misc";
+
+export function getClosingDaysLabels(year: number): string[] {
+  return getPublicHolidaysFr(year)
+    .filter(({ date }) => !isWeekend(date))
+    .map(({ date, name }) => `${date.format("DD/MM/YYYY")} : ${name}`);
+}
+
+export function canBookReadingRoom(day: Date): boolean {
+  return isBusinessDay(day);
+}
+```
+
+`getEasterDate` donne le dimanche de Pâques d'une année, utile pour une animation calée sur
+les vacances de printemps.
+
+## Planning hebdomadaire et rapports
+
+`getIsoWeek` donne le numéro de semaine ISO 8601 (semaines du lundi au dimanche), et
+`getDateRange` liste les jours, mois ou années d'une période pour construire des colonnes ou
+des lignes de rapport.
+
+```ts title="src/reports/monthly-loans.ts"
+import { getDateRange, getIsoWeek } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  borrowedAt: Date;
+}
+
+export function countLoansByMonth(loans: ILoan[], from: Date, to: Date): Map<string, number> {
+  const counts = new Map(
+    getDateRange(from, to, "month").map((month) => [month.format("YYYY-MM"), 0]),
+  );
+  for (const loan of loans) {
+    const key = `${loan.borrowedAt.getFullYear()}-${String(loan.borrowedAt.getMonth() + 1).padStart(2, "0")}`;
+    const count = counts.get(key);
+    if (count !== undefined) {
+      counts.set(key, count + 1);
+    }
+  }
+  return counts;
+}
+
+export function getPlanningTitle(day: Date): string {
+  return `Planning des permanences, semaine ${getIsoWeek(day)}`;
+}
+```
+
+## Adhérents : âge, année scolaire, périodes
+
+`getAge` calcule l'âge en années révolues (anniversaire compté le jour même), `getSchoolYear`
+rattache une date à une année scolaire « 2026-2027 » (rentrée en septembre par défaut, mois
+configurable) et `isDateBetween` teste l'appartenance à une période, bornes incluses et au jour
+près par défaut.
+
+```ts title="src/members/membership.ts"
+import { getAge, getSchoolYear, isDateBetween } from "@etiennea20/adr-misc";
+
+interface IMember {
+  birthDate: string;
+  membershipStart: string;
+  membershipEnd: string;
+}
+
+export function getMembershipFee(member: IMember, today = new Date()): number {
+  return getAge(member.birthDate, today) < 18 ? 0 : 15;
+}
+
+export function isMembershipActive(member: IMember, today = new Date()): boolean {
+  return isDateBetween(today, member.membershipStart, member.membershipEnd);
+}
+
+export function getRegistrationPeriod(registeredAt: Date): string {
+  return `Inscriptions ${getSchoolYear(registeredAt)}`;
+}
+```
+
+## Récapitulatif
+
+| Élément                 | Rôle                                                          |
+| ----------------------- | ------------------------------------------------------------- |
+| `addBusinessDays`       | Ajoute ou retire des jours ouvrés à une date                  |
+| `countBusinessDays`     | Compte les jours ouvrés d'une période, bornes incluses        |
+| `getAge`                | Âge en années révolues à une date de référence                |
+| `getDateRange`          | Liste des jours, mois ou années d'une période                 |
+| `getEasterDate`         | Dimanche de Pâques d'une année (Meeus/Jones/Butcher)          |
+| `getIsoWeek`            | Numéro de semaine ISO 8601                                    |
+| `getPublicHolidaysFr`   | Jours fériés de métropole d'une année (option Alsace-Moselle) |
+| `getSchoolYear`         | Libellé de l'année scolaire, « 2026-2027 »                    |
+| `isBusinessDay`         | Ni week-end, ni jour férié                                    |
+| `isDateBetween`         | Date comprise dans une période                                |
+| `isPublicHolidayFr`     | Jour férié en métropole                                       |
+| `isWeekend`             | Samedi ou dimanche                                            |
+| `toIsoDate`             | Format « YYYY-MM-DD » sans décalage UTC                       |
+| `IPublicHoliday`        | Jour férié renvoyé : `date` et `name`                         |
+| `IPublicHolidayOptions` | Option `alsaceMoselle` commune aux fonctions de jours fériés  |
+| `IDateBetweenOptions`   | Options de `isDateBetween` : `inclusive`, `unit`              |
+| `ISchoolYearOptions`    | Option `startMonth` de `getSchoolYear`                        |
+
+## Points d'attention
+
+- **Années prises en charge** : de 1583 à 9999 pour tout ce qui touche aux jours fériés (le
+  calcul de Pâques suppose le calendrier grégorien) ; au-delà, une `RangeError` est levée.
+- **Fermetures propres à la structure** (ponts, congés annuels, jours fériés d'outre-mer) : non
+  connues. Les filtrer en plus de `isBusinessDay`.
+- **Fuseaux horaires** : les calculs se font dans le fuseau de l'environnement d'exécution. Un
+  serveur en UTC et un navigateur en heure de Paris peuvent voir deux jours différents autour
+  de minuit : échanger des dates calendaires au format `toIsoDate`.
+- **Durées fixes** : pour un délai en millisecondes (cache, minuterie), utiliser `EDurationMs`
+  de la catégorie `enums`, pas ces fonctions calendaires.
+- **Formatage** : ces fonctions calculent ; pour afficher une date en français, utiliser la
+  catégorie `format`.
