@@ -1,6 +1,6 @@
 {
   "name": "@etiennea20/adr-misc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Utilitaires TypeScript partagés front et back : assertions, asynchrone, tableaux, objets, chaînes, parsing et formatage français, dates (dayjs), validation, énumérations.",
   "license": "UNLICENSED",
   "type": "module",
