@@ -1,0 +1,153 @@
+---
+title: Énumérations
+sidebar_label: Énumérations
+sidebar_position: 15
+---
+
+# Énumérations
+
+La catégorie `enums` fournit des énumérations prêtes à l'emploi (jours, mois, statuts et
+méthodes HTTP, sens de tri, durées, types MIME), leurs libellés français, et quatre helpers pour
+manipuler n'importe quelle énumération du projet.
+
+Le mot-clé `enum` de TypeScript est interdit dans ce dépôt : une énumération est un objet
+`as const` préfixé par `E`, accompagné d'un type du même nom qui réunit ses valeurs. La
+constante et le type s'importent ensemble :
+
+```ts
+import { EHttpStatus } from "@etiennea20/adr-misc";
+
+const status: EHttpStatus = EHttpStatus.NOT_FOUND; // 404
+```
+
+Les exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Jours et mois sans nombre magique
+
+`EWeekDay` et `EMonth` suivent la numérotation de `Date.prototype.getDay()` et
+`Date.prototype.getMonth()` (dimanche = 0, janvier = 0). `WEEK_DAY_LABELS` et `MONTH_LABELS`
+donnent les libellés français en minuscules, sans dépendre de la locale dayjs.
+
+```ts title="src/opening/opening-hours.ts"
+import { EWeekDay, MONTH_LABELS, WEEK_DAY_LABELS } from "@etiennea20/adr-misc";
+import type { EMonth } from "@etiennea20/adr-misc";
+
+const OPENING_DAYS: readonly EWeekDay[] = [
+  EWeekDay.TUESDAY,
+  EWeekDay.WEDNESDAY,
+  EWeekDay.FRIDAY,
+  EWeekDay.SATURDAY,
+];
+
+export function isOpen(day: Date): boolean {
+  return OPENING_DAYS.includes(day.getDay() as EWeekDay);
+}
+
+export function describeOpeningDays(): string {
+  return OPENING_DAYS.map((weekDay) => WEEK_DAY_LABELS[weekDay]).join(", ");
+}
+
+export function getNewsletterTitle(day: Date): string {
+  return `Nouveautés de ${MONTH_LABELS[day.getMonth() as EMonth]} ${day.getFullYear()}`;
+}
+```
+
+## Échanges HTTP : statuts, méthodes, types MIME
+
+`EHttpStatus` nomme les codes de statut courants (comme `HttpStatus` de NestJS), `EHttpMethod`
+les méthodes et `EMimeType` les types de contenu, à utiliser côté front comme côté back.
+
+```ts title="src/books/book-api.ts"
+import { EHttpMethod, EHttpStatus, EMimeType } from "@etiennea20/adr-misc";
+
+export async function fetchBook(id: string): Promise<IBook | undefined> {
+  const response = await fetch(`/api/books/${id}`, {
+    method: EHttpMethod.GET,
+    headers: { Accept: EMimeType.JSON },
+  });
+  if (response.status === EHttpStatus.NOT_FOUND) {
+    return undefined;
+  }
+  return (await response.json()) as IBook;
+}
+
+export function downloadCatalog(content: ArrayBuffer): Blob {
+  return new Blob([content], { type: EMimeType.XLSX });
+}
+```
+
+## Tri et durées
+
+`ESortDirection` partage les mêmes valeurs (`"asc"`, `"desc"`) entre un tableau côté front et
+une API. `EDurationMs` remplace les produits comme `24 * 60 * 60 * 1000`.
+
+```ts title="src/books/use-books-query.ts"
+import { EDurationMs, ESortDirection } from "@etiennea20/adr-misc";
+
+export const BOOKS_QUERY_OPTIONS = {
+  staleTime: 5 * EDurationMs.MINUTE,
+  gcTime: EDurationMs.HOUR,
+};
+
+export const DEFAULT_BOOK_SORT = { field: "title", direction: ESortDirection.ASC };
+```
+
+## Helpers pour n'importe quelle énumération
+
+`getEnumValues` et `getEnumKeys` listent valeurs et clés avec un type précis (contrairement à
+`Object.values` et `Object.keys`), `isEnumValue` valide une valeur venue de l'extérieur (garde
+de type) et `getEnumKey` retrouve le nom d'une valeur.
+
+```ts title="src/loans/loan-status.ts"
+import { getEnumKey, getEnumValues, isEnumValue } from "@etiennea20/adr-misc";
+
+export const ELoanStatus = {
+  IN_PROGRESS: "in-progress",
+  RETURNED: "returned",
+  LATE: "late",
+} as const;
+
+export type ELoanStatus = (typeof ELoanStatus)[keyof typeof ELoanStatus];
+
+// Options d'une liste déroulante de filtre.
+export const LOAN_STATUS_OPTIONS = getEnumValues(ELoanStatus);
+
+// Paramètre d'URL non fiable : validé avant usage.
+export function parseLoanStatus(value: string | null): ELoanStatus | undefined {
+  return isEnumValue(ELoanStatus, value) ? value : undefined;
+}
+
+// Pour les journaux : "late" devient "LATE".
+export function describeLoanStatus(status: ELoanStatus): string {
+  return getEnumKey(ELoanStatus, status) ?? status;
+}
+```
+
+## Récapitulatif
+
+| Élément           | Rôle                                                      |
+| ----------------- | --------------------------------------------------------- |
+| `EDurationMs`     | Seconde, minute, heure, jour, semaine en millisecondes    |
+| `EHttpMethod`     | Méthodes HTTP (`GET`, `POST`…)                            |
+| `EHttpStatus`     | Codes de statut HTTP courants                             |
+| `EMimeType`       | Types MIME courants (JSON, CSV, PDF, XLSX, PNG…)          |
+| `EMonth`          | Mois, janvier = 0                                         |
+| `ESortDirection`  | Sens de tri, `"asc"` ou `"desc"`                          |
+| `EWeekDay`        | Jours de la semaine, dimanche = 0                         |
+| `MONTH_LABELS`    | Libellés français des mois                                |
+| `WEEK_DAY_LABELS` | Libellés français des jours                               |
+| `getEnumKeys`     | Clés d'une énumération, typées                            |
+| `getEnumValues`   | Valeurs d'une énumération, typées                         |
+| `getEnumKey`      | Clé qui porte une valeur (recherche inverse)              |
+| `isEnumValue`     | Garde de type : la valeur appartient-elle à l'énumération |
+
+## Points d'attention
+
+- Les helpers attendent un objet `as const` dont les valeurs sont des chaînes ou des nombres ;
+  ils ne conviennent pas aux `enum` TypeScript numériques (clés inverses).
+- La comparaison est stricte : `"1"` n'est pas une valeur de `EWeekDay`. Convertir d'abord un
+  paramètre d'URL numérique.
+- `EDurationMs.DAY` vaut toujours 24 heures : pour ajouter un jour **calendaire** à une date
+  (changement d'heure), utiliser dayjs ou la catégorie `date`.
+- Les libellés sont en minuscules (usage typographique français) : mettre la majuscule à
+  l'affichage si besoin.

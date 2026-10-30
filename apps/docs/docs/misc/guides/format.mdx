@@ -1,0 +1,213 @@
+---
+title: Formatage français
+sidebar_label: Formatage
+sidebar_position: 13
+---
+
+# Formatage français
+
+La catégorie `format` transforme des valeurs en **textes prêts à afficher**, selon les usages
+français : nombres, montants, pourcentages, tailles de fichiers, durées, dates, dates
+relatives, listes, numéros de téléphone, ordinaux, noms de personnes et IBAN.
+
+À utiliser dans l'interface (tableaux, fiches, notifications) comme côté serveur (courriels,
+exports, PDF), puisque les fonctions marchent à l'identique dans le navigateur et dans Node.
+Elles s'appuient sur `Intl` et dayjs, avec `fr-FR` par défaut et une option `locale` pour les
+autres langues. Les exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Convention : une chaîne vide plutôt que « NaN »
+
+Une valeur absente ou invalide (`null`, `undefined`, `NaN`, date invalide) donne une chaîne
+vide : une cellule de tableau reste vide au lieu d'afficher « NaN » ou « Invalid Date ». Seule
+une **option** invalide (devise inconnue, locale mal formée, rang négatif) lève une
+`RangeError`, car c'est une erreur de programmation.
+
+```ts title="src/books/book-row.ts"
+import { formatCurrency, formatDate } from "@etiennea20/adr-misc";
+
+interface IBook {
+  title: string;
+  price: number | null;
+  acquiredAt: Date | null;
+}
+
+export function toBookRow(book: IBook): string[] {
+  return [book.title, formatCurrency(book.price), formatDate(book.acquiredAt)];
+}
+
+toBookRow({ title: "Germinal", price: 8.5, acquiredAt: null });
+// ["Germinal", "8,50 €", ""]
+```
+
+## Nombres, montants et pourcentages
+
+`formatNumber`, `formatCurrency` et `formatPercent` utilisent `Intl.NumberFormat` : espace fine
+insécable entre les milliers, virgule décimale, espace insécable avant `€` et `%`.
+
+```ts title="src/stats/library-stats.ts"
+import { formatCurrency, formatNumber, formatPercent } from "@etiennea20/adr-misc";
+
+formatNumber(12480); // "12 480" (livres au catalogue)
+formatNumber(3, { signDisplay: "exceptZero" }); // "+3" (variation d'un mois à l'autre)
+formatCurrency(1234.5); // "1 234,50 €"
+formatCurrency(0.2, { fractionDigits: 2 }); // "0,20 €" (pénalité journalière)
+formatPercent(0.873); // "87,3 %" (taux de retour à l'heure)
+```
+
+`formatPercent` attend un **ratio** (`0.873`, pas `87.3`), comme celui que renvoie
+`parseNumber` pour « 87,3 % ».
+
+Les espaces produites par `Intl` sont insécables (U+202F et U+00A0) : dans un test, écrire
+`"1 234,50 €"` plutôt qu'une espace ordinaire.
+
+## Tailles de fichiers
+
+`formatBytes` choisit l'unité (`o`, `ko`, `Mo`, `Go`…) en base 1000, ou en base 1024 avec
+`binary: true` (`Kio`, `Mio`…).
+
+```ts title="src/attachments/attachment-label.ts"
+import { formatBytes } from "@etiennea20/adr-misc";
+
+export function attachmentLabel(name: string, size: number): string {
+  return `${name} (${formatBytes(size)})`;
+}
+
+attachmentLabel("couverture.jpg", 245_760); // "couverture.jpg (245,8 ko)"
+attachmentLabel("catalogue.pdf", 3_500_000); // "catalogue.pdf (3,5 Mo)"
+```
+
+## Durées
+
+`formatDuration` reçoit des millisecondes et propose trois styles. Les styles `short` et `clock`
+sont relus à l'identique par `parseDuration`.
+
+```ts title="src/loans/loan-duration.ts"
+import { formatDuration } from "@etiennea20/adr-misc";
+
+const HOUR = 60 * 60 * 1000;
+
+formatDuration(50 * HOUR); // "2 j 2 h"
+formatDuration(50 * HOUR, { style: "long" }); // "2 jours et 2 heures"
+formatDuration(50 * HOUR, { style: "clock" }); // "50:00:00"
+formatDuration(50 * HOUR + 59 * 60 * 1000, { maxUnits: 1 }); // "2 j" (unités suivantes tronquées)
+```
+
+## Dates et heures
+
+`formatDate` et `formatDateTime` acceptent un format dayjs ou un style `Intl` : `short`,
+`medium`, `long` ou `full`. Les styles traduisent les noms de mois et de jours sans charger de
+locale dayjs.
+
+```ts title="src/loans/loan-dates.ts"
+import { formatDate, formatDateTime } from "@etiennea20/adr-misc";
+
+const dueAt = new Date(2026, 0, 15, 18, 0);
+
+formatDate(dueAt); // "15/01/2026"
+formatDate(dueAt, { format: "full" }); // "jeudi 15 janvier 2026"
+formatDate(dueAt, { format: "YYYY-MM-DD" }); // "2026-01-15"
+formatDateTime(dueAt); // "15/01/2026 18:00"
+formatDateTime(dueAt, { format: "long" }); // "15 janvier 2026 à 18:00"
+```
+
+Avec un format dayjs contenant des noms (`D MMMM YYYY`), la langue est celle de la locale dayjs
+globale du projet : en anglais tant que `dayjs/locale/fr` n'est pas chargé. Préférer les styles
+`long` et `full`.
+
+## Dates relatives
+
+`formatRelativeTime` choisit l'unité la plus parlante et utilise les expressions usuelles
+(« hier », « la semaine prochaine »). Passer `now` rend le résultat reproductible.
+
+```ts title="src/loans/due-label.ts"
+import { formatRelativeTime } from "@etiennea20/adr-misc";
+
+export function dueLabel(dueAt: Date, now: Date = new Date()): string {
+  return `Retour attendu ${formatRelativeTime(dueAt, { now })}`;
+}
+
+const now = new Date(2026, 0, 15, 12, 0);
+dueLabel(new Date(2026, 0, 16, 12, 0), now); // "Retour attendu demain"
+dueLabel(new Date(2026, 0, 18, 12, 0), now); // "Retour attendu dans 3 jours"
+dueLabel(new Date(2026, 0, 12, 12, 0), now); // "Retour attendu il y a 3 jours"
+```
+
+## Listes et ordinaux
+
+```ts title="src/books/book-summary.ts"
+import { formatList, formatOrdinal } from "@etiennea20/adr-misc";
+
+formatList(["Zola", "Hugo", "Balzac"]); // "Zola, Hugo et Balzac"
+formatList(["broché", "poche"], { type: "disjunction" }); // "broché ou poche"
+formatList(["Zola", "", "Hugo"]); // "Zola et Hugo" (éléments vides ignorés)
+
+formatOrdinal(1); // "1er" (le 1er tome)
+formatOrdinal(1, { gender: "feminine" }); // "1re" (la 1re édition)
+formatOrdinal(3); // "3e"
+```
+
+## Adhérents : nom, téléphone et IBAN
+
+```ts title="src/members/member-card.ts"
+import { formatFullName, formatIban, formatPhoneNumber } from "@etiennea20/adr-misc";
+
+interface IMember {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  iban: string;
+}
+
+export function memberCard(member: IMember): string[] {
+  return [
+    formatFullName(member),
+    formatPhoneNumber(member.phone),
+    formatIban(member.iban, { masked: true }),
+  ];
+}
+
+memberCard({
+  firstName: "jean-pierre",
+  lastName: "Dupont",
+  phone: "06.12.34.56.78",
+  iban: "fr7630006000011234567890189",
+});
+// ["Jean-Pierre DUPONT", "06 12 34 56 78", "FR76 **** **** **** **** ***0 189"]
+```
+
+- `formatFullName` capitalise le prénom et met le nom en majuscules ; `order: "lastFirst"`
+  donne « DUPONT Jean-Pierre » pour une liste triée par nom.
+- `formatPhoneNumber` conserve la forme nationale ou internationale de la saisie (option
+  `international` pour l'imposer) et renvoie tel quel un numéro non reconnu.
+- `formatIban` regroupe par quatre ; `masked: true` ne laisse visibles que les quatre premiers et
+  les quatre derniers caractères.
+
+## Récapitulatif
+
+| Élément              | Rôle                                                  |
+| -------------------- | ----------------------------------------------------- |
+| `formatNumber`       | Nombre au format français (« 1 234,5 »)               |
+| `formatCurrency`     | Montant avec devise, euro par défaut (« 1 234,50 € ») |
+| `formatPercent`      | Ratio en pourcentage (« 12,5 % »)                     |
+| `formatBytes`        | Taille de fichier (« 1,5 Mo », « 1,5 Kio »)           |
+| `formatDuration`     | Durée en millisecondes (« 1 h 30 min », « 1:30:00 »)  |
+| `formatDate`         | Date (« 15/01/2026 », « jeudi 15 janvier 2026 »)      |
+| `formatDateTime`     | Date et heure (« 15/01/2026 10:30 »)                  |
+| `formatRelativeTime` | Écart avec maintenant (« il y a 3 jours », « hier »)  |
+| `formatList`         | Énumération (« Zola, Hugo et Balzac »)                |
+| `formatOrdinal`      | Ordinal abrégé (« 1er », « 1re », « 2e »)             |
+| `formatFullName`     | Nom complet (« Marie DUPONT »)                        |
+| `formatPhoneNumber`  | Téléphone français par paires (« 06 12 34 56 78 »)    |
+| `formatIban`         | IBAN par groupes de quatre, masquable                 |
+
+## Points d'attention
+
+- Ces fonctions **affichent** : elles ne valident rien. Un IBAN ou un numéro de téléphone faux
+  est formaté sans erreur ; le contrôler avec les fonctions de validation.
+- Le résultat de `Intl` peut varier légèrement d'une version de navigateur ou de Node à l'autre
+  (nature des espaces, abréviations du style `medium`) : ne pas s'en servir comme clé ou comme
+  valeur stockée, et préférer un format dayjs explicite pour un export.
+- Une chaîne passée à `formatDate` est lue en ISO 8601 : convertir d'abord une saisie
+  « 15/01/2026 » avec `parseDate`.
+- `formatDate` et `formatDateTime` affichent l'heure du **fuseau local** de l'environnement
+  (celui du serveur côté Node).

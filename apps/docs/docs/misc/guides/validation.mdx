@@ -1,0 +1,182 @@
+---
+title: Valider des saisies
+sidebar_label: Validation
+sidebar_position: 16
+---
+
+# Valider des saisies
+
+La catégorie `validation` regroupe des **prédicats** : des fonctions qui reçoivent une chaîne et
+renvoient `true` ou `false`, sans jamais lever d'erreur. Elles couvrent les formats courants
+d'une application française : adresse électronique, téléphone, code postal, SIREN, SIRET, TVA
+intracommunautaire, IBAN, NIR, mot de passe, UUID, URL, adresse IPv4, couleur.
+
+Elles servent aussi bien dans un formulaire React (affichage d'une erreur sous le champ) que
+côté serveur (contrôle d'un DTO NestJS, d'un import CSV). Les exemples ci-dessous sont tirés
+d'une application fictive « Bibliothèque ».
+
+## Inscrire un adhérent
+
+`isEmail`, `isPhoneNumberFr` et `isPostalCodeFr` vérifient la **syntaxe** des coordonnées.
+`isPhoneNumberFr` accepte les présentations usuelles (`06 12 34 56 78`, `06.12.34.56.78`,
+`+33 6 12 34 56 78`) ; `isEmail` et `isPostalCodeFr` refusent les espaces : appeler `trim()`
+avant si la saisie n'est pas nettoyée.
+
+```ts title="src/members/validate-member-form.ts"
+import { isEmail, isPhoneNumberFr, isPostalCodeFr } from "@etiennea20/adr-misc";
+
+export interface IMemberForm {
+  email: string;
+  phone: string;
+  postalCode: string;
+}
+
+export type MemberFormErrors = Partial<Record<keyof IMemberForm, string>>;
+
+export function validateMemberForm(form: IMemberForm): MemberFormErrors {
+  const errors: MemberFormErrors = {};
+  if (!isEmail(form.email.trim())) {
+    errors.email = "Adresse électronique invalide";
+  }
+  if (form.phone !== "" && !isPhoneNumberFr(form.phone)) {
+    errors.phone = "Numéro de téléphone invalide";
+  }
+  if (!isPostalCodeFr(form.postalCode.trim())) {
+    errors.postalCode = "Code postal invalide";
+  }
+  return errors;
+}
+```
+
+## Enregistrer un fournisseur
+
+Pour les fournisseurs de la bibliothèque (librairies, relieurs), `isSiren`, `isSiret`,
+`isFrenchVatNumber` et `isIban` contrôlent la clé de chaque identifiant. Les espaces de
+présentation sont tolérés. Une clé correcte ne prouve pas que l'entreprise ou le compte existe :
+interroger l'INSEE ou le service VIES si c'est nécessaire.
+
+```ts title="src/suppliers/validate-supplier.ts"
+import { isFrenchVatNumber, isIban, isSiret } from "@etiennea20/adr-misc";
+
+export interface ISupplier {
+  name: string;
+  siret: string;
+  vatNumber: string;
+  iban: string;
+}
+
+export function supplierErrors(supplier: ISupplier): string[] {
+  const errors: string[] = [];
+  if (!isSiret(supplier.siret)) errors.push("SIRET invalide");
+  if (supplier.vatNumber !== "" && !isFrenchVatNumber(supplier.vatNumber)) {
+    errors.push("Numéro de TVA invalide");
+  }
+  if (!isIban(supplier.iban)) errors.push("IBAN invalide");
+  return errors;
+}
+
+supplierErrors({
+  name: "Librairie du Centre",
+  siret: "732 829 320 00074",
+  vatNumber: "FR 44 732 829 320",
+  iban: "FR76 3000 6000 0112 3456 7890 189",
+}); // []
+```
+
+`isLuhnValid` expose l'algorithme de Luhn utilisé par `isSiren` et `isSiret`, pour d'autres
+numéros (carte bancaire, IMEI). `isNir` valide un numéro de sécurité sociale, y compris pour
+les personnes nées en Corse (`2A`, `2B`).
+
+## Choisir un mot de passe
+
+`isStrongPassword` répond oui ou non ; `getPasswordStrength` renvoie un score de 0 à 4 et la liste
+des critères manquants (valeurs de `EPasswordCriterion`), de quoi afficher une jauge et des
+conseils pendant la saisie. Les règles par défaut suivent la recommandation de la CNIL :
+12 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial. Chaque règle
+se surcharge avec un objet `IPasswordRules`.
+
+```ts title="src/accounts/password-hints.ts"
+import {
+  EPasswordCriterion,
+  getPasswordStrength,
+  isStrongPassword,
+  type IPasswordRules,
+} from "@etiennea20/adr-misc";
+
+const STAFF_RULES: IPasswordRules = { minLength: 14 };
+
+const HINTS: Record<EPasswordCriterion, string> = {
+  [EPasswordCriterion.MIN_LENGTH]: "Au moins 14 caractères",
+  [EPasswordCriterion.UPPERCASE]: "Une lettre majuscule",
+  [EPasswordCriterion.LOWERCASE]: "Une lettre minuscule",
+  [EPasswordCriterion.DIGIT]: "Un chiffre",
+  [EPasswordCriterion.SPECIAL_CHAR]: "Un caractère spécial",
+};
+
+export function passwordHints(password: string): string[] {
+  return getPasswordStrength(password, STAFF_RULES).missingCriteria.map(
+    (criterion) => HINTS[criterion],
+  );
+}
+
+export function canSavePassword(password: string): boolean {
+  return isStrongPassword(password, STAFF_RULES);
+}
+```
+
+## Identifiants et valeurs techniques
+
+- `isUuid` contrôle l'identifiant reçu dans une route (`/livres/:id`) avant d'interroger la base ;
+  le paramètre facultatif `version` restreint à une version (4, 7…).
+- `isUrl` valide un lien saisi (site d'un éditeur, notice en ligne). Par défaut seuls `http` et
+  `https` sont acceptés ; `IIsUrlOptions` permet d'en autoriser d'autres.
+- `isIpv4` valide une adresse d'une liste blanche ; `isHexColor` la couleur d'une étiquette de
+  rayon (`#1e90ff`).
+
+```ts title="src/books/book-route.ts"
+import { isUrl, isUuid } from "@etiennea20/adr-misc";
+
+export function parseBookId(id: string): string | undefined {
+  return isUuid(id) ? id.toLowerCase() : undefined;
+}
+
+export function isPublisherWebsite(value: string): boolean {
+  return isUrl(value, { protocols: ["https"] });
+}
+```
+
+## Récapitulatif
+
+| Élément               | Rôle                                                             |
+| --------------------- | ---------------------------------------------------------------- |
+| `isEmail`             | Adresse électronique syntaxiquement valide                       |
+| `isPhoneNumberFr`     | Numéro de téléphone français (`0X`, `+33`, `0033`)               |
+| `isPostalCodeFr`      | Code postal français plausible (métropole, outre-mer, Monaco)    |
+| `isSiren`             | SIREN : 9 chiffres et clé de Luhn                                |
+| `isSiret`             | SIRET : 14 chiffres et clé de Luhn (exception de La Poste gérée) |
+| `isFrenchVatNumber`   | Numéro de TVA intracommunautaire français                        |
+| `isIban`              | IBAN : format, longueur du pays, clé modulo 97                   |
+| `isNir`               | Numéro de sécurité sociale, Corse comprise                       |
+| `isLuhnValid`         | Clé de Luhn d'une suite de chiffres                              |
+| `isStrongPassword`    | Mot de passe conforme aux règles demandées                       |
+| `getPasswordStrength` | Score de 0 à 4 et critères manquants d'un mot de passe           |
+| `EPasswordCriterion`  | Critères de robustesse d'un mot de passe                         |
+| `IPasswordRules`      | Règles de robustesse, chacune surchargeable                      |
+| `IPasswordStrength`   | Résultat de `getPasswordStrength`                                |
+| `isUuid`              | UUID au format canonique, version facultative                    |
+| `isUrl`               | URL absolue avec un protocole accepté                            |
+| `IIsUrlOptions`       | Options de `isUrl` : protocoles acceptés                         |
+| `isIpv4`              | Adresse IPv4 en notation décimale pointée                        |
+| `isHexColor`          | Couleur hexadécimale CSS (`#RGB`, `#RRGGBB`, avec ou sans alpha) |
+
+## Points d'attention
+
+- **Syntaxe, pas existence** : aucun prédicat n'interroge un service externe. Une adresse
+  valide peut ne pas exister, un SIRET valide peut correspondre à un établissement fermé.
+- **Espaces** : les identifiants à présentation groupée (SIREN, SIRET, TVA, IBAN, NIR, Luhn)
+  tolèrent les espaces ; les autres prédicats les refusent. Nettoyer la saisie avec `trim()`.
+- **Message d'erreur** : un prédicat ne dit pas pourquoi la valeur est invalide. Pour guider
+  l'utilisateur sur un mot de passe, utiliser `getPasswordStrength` plutôt que
+  `isStrongPassword`.
+- **Côté serveur**, refaire la validation même si le formulaire l'a déjà faite : le navigateur
+  n'est pas une source de confiance.

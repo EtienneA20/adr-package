@@ -1,0 +1,136 @@
+---
+title: Utilitaires de fonctions
+sidebar_label: Fonctions
+sidebar_position: 4
+---
+
+# Utilitaires de fonctions
+
+La catégorie `function` regroupe des utilitaires qui **reçoivent ou renvoient des
+fonctions** : composer des transformations, mettre un calcul en cache, n'exécuter une
+initialisation qu'une fois, inverser un prédicat, ou fournir une fonction par défaut.
+
+À utiliser pour écrire des traitements lisibles et sans répétition, aussi bien dans le
+navigateur que dans Node. Les exemples ci-dessous sont tirés d'une application fictive
+« Bibliothèque ».
+
+## Composer une transformation avec `pipe`
+
+`pipe` enchaîne des fonctions de gauche à droite, dans l'ordre d'exécution. Les types sont
+vérifiés d'une étape à l'autre (jusqu'à six étapes) ; la première étape peut recevoir
+plusieurs arguments.
+
+```ts title="src/books/to-book-slug.ts"
+import { pipe } from "@etiennea20/adr-misc";
+
+export const toBookSlug = pipe(
+  (title: string, author: string) => `${title} ${author}`,
+  (text) => text.trim().toLowerCase(),
+  (text) => text.normalize("NFD").replace(/\p{Diacritic}/gu, ""),
+  (text) => text.replace(/[^a-z0-9]+/g, "-"),
+);
+
+toBookSlug("Les Misérables", "Victor Hugo"); // "les-miserables-victor-hugo"
+```
+
+## Mettre un calcul coûteux en cache avec `memoize`
+
+`memoize` conserve le résultat de chaque appel selon ses arguments. Par défaut, la clé est le
+premier argument : fournir `resolveKey` dès que la fonction en reçoit plusieurs. `maxSize`
+borne le cache (l'entrée utilisée le moins récemment est supprimée) et `clear()` le vide.
+
+```ts title="src/stats/count-member-loans.ts"
+import { memoize } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  memberId: string;
+  year: number;
+}
+
+export function createLoanCounter(loans: readonly ILoan[]) {
+  return memoize(
+    (memberId: string, year: number) =>
+      loans.filter((loan) => loan.memberId === memberId && loan.year === year).length,
+    { resolveKey: (memberId, year) => `${memberId}:${year}`, maxSize: 1000 },
+  );
+}
+
+const countLoans = createLoanCounter(allLoans);
+countLoans("m1", 2026); // calculé
+countLoans("m1", 2026); // lu dans le cache
+countLoans.clear(); // après un nouvel emprunt
+```
+
+## Initialiser une seule fois avec `once`
+
+`once` n'exécute la fonction qu'au premier appel et renvoie ensuite le même résultat. Pour une
+fonction asynchrone, la même promesse est partagée par tous les appelants. Si la fonction
+lève, rien n'est mémorisé et l'appel suivant réessaie.
+
+```ts title="src/catalog/load-catalog.ts"
+import { once } from "@etiennea20/adr-misc";
+
+export const loadCatalog = once(() => api.get<IBook[]>("/books"));
+
+// Deux composants qui demandent le catalogue en même temps : une seule requête.
+const [first, second] = await Promise.all([loadCatalog(), loadCatalog()]);
+```
+
+## Réutiliser un prédicat avec `negate`
+
+```ts title="src/loans/ongoing-loans.ts"
+import { negate } from "@etiennea20/adr-misc";
+
+const isReturned = (loan: ILoan): boolean => loan.returnedAt !== undefined;
+
+export const getOngoingLoans = (loans: ILoan[]): ILoan[] => loans.filter(negate(isReturned));
+```
+
+## Fournir une fonction par défaut avec `identity` et `noop`
+
+`identity` renvoie sa valeur sans la modifier ; `noop` ne fait rien. Ils servent de valeur par
+défaut à un paramètre de type fonction, ce qui évite un test `if (callback)` à chaque appel.
+
+```ts title="src/members/notify-late-members.ts"
+import { identity, noop } from "@etiennea20/adr-misc";
+
+export function notifyLateMembers(
+  members: IMember[],
+  formatName: (name: string) => string = identity,
+  onNotified: (member: IMember) => void = noop,
+): void {
+  for (const member of members) {
+    sendReminder(formatName(member.name));
+    onNotified(member);
+  }
+}
+
+// Ignorer volontairement l'échec d'un envoi de statistiques.
+void api.post("/stats/visits").catch(noop);
+```
+
+## Récapitulatif
+
+| Élément             | Rôle                                                               |
+| ------------------- | ------------------------------------------------------------------ |
+| `pipe`              | Compose des fonctions de gauche à droite (1 à 6 étapes typées)     |
+| `memoize`           | Met en cache les résultats d'une fonction pure selon ses arguments |
+| `IMemoizeOptions`   | Options de `memoize` : `resolveKey`, `maxSize`                     |
+| `IMemoizedFunction` | Fonction mémoïsée, dotée de `clear()`                              |
+| `once`              | N'exécute une fonction qu'au premier appel réussi                  |
+| `negate`            | Inverse un prédicat                                                |
+| `identity`          | Renvoie sa valeur sans la modifier                                 |
+| `noop`              | Ne fait rien (rappel par défaut, rejet ignoré)                     |
+
+## Points d'attention
+
+- `memoize` ne convient qu'aux fonctions **pures** : un résultat qui dépend de l'heure, d'un
+  état global ou d'une requête réseau resterait figé dans le cache.
+- Les clés de `memoize` sont comparées comme celles d'une `Map` : deux objets distincts, même
+  identiques, sont deux clés différentes. Construire une clé texte avec `resolveKey`.
+- Sans `maxSize`, le cache de `memoize` grandit sans limite : le borner pour une fonction
+  appelée avec beaucoup d'arguments différents (côté serveur notamment).
+- Une promesse rejetée est mise en cache par `memoize` et par `once` : le rejet est renvoyé à
+  chaque appel suivant (vider le cache avec `clear()` pour `memoize`).
+- `negate` sur une garde de type (`value is X`) renvoie un simple booléen : TypeScript
+  n'affine plus le type.

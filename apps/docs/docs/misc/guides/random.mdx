@@ -1,0 +1,135 @@
+---
+title: Aléatoire et UUID
+sidebar_label: Aléatoire
+sidebar_position: 11
+---
+
+# Aléatoire et UUID
+
+La catégorie `random` regroupe les tirages au hasard (entier, décimal, élément, échantillon,
+mélange, chaîne) et la génération d'UUID. Chaque fonction de tirage accepte un **générateur
+injectable** `random` (une fonction qui renvoie un nombre dans `[0, 1)`, `Math.random` par
+défaut) : il suffit de lui passer `createSeededRandom(graine)` pour obtenir un résultat
+reproductible dans les tests ou les démonstrations.
+
+À utiliser pour la mise en avant aléatoire de contenus, les tirages au sort, les codes courts
+et les données de démonstration. Les exemples ci-dessous sont tirés d'une application fictive
+« Bibliothèque ».
+
+## Mettre en avant des livres au hasard
+
+`randomItem` choisit un élément, `sample` en tire plusieurs **sans remise** (chaque livre ne
+sort qu'une fois) et `shuffle` mélange toute la liste. Aucune ne modifie le tableau reçu.
+
+```ts title="src/catalog/featured-books.ts"
+import { randomItem, sample, shuffle } from "@etiennea20/adr-misc";
+
+interface IBook {
+  id: string;
+  title: string;
+}
+
+export function bookOfTheDay(books: readonly IBook[]): IBook | undefined {
+  return randomItem(books); // undefined si le catalogue est vide
+}
+
+export function featuredBooks(books: readonly IBook[]): IBook[] {
+  return sample(books, 3); // au plus 3 livres distincts
+}
+
+export function quizQuestions(questions: readonly string[]): string[] {
+  return shuffle(questions);
+}
+```
+
+Ne pas écrire `items.sort(() => Math.random() - 0.5)` : ce mélange est biaisé et modifie le
+tableau d'origine. `shuffle` utilise l'algorithme de Fisher-Yates, où toutes les permutations
+sont équiprobables.
+
+## Générer un code de retrait lisible
+
+`randomString` tire des caractères dans un alphabet configurable. Retirer les caractères
+ambigus (`0` et `O`, `1` et `I`) facilite la saisie au comptoir.
+
+```ts title="src/reservations/pickup-code.ts"
+import { randomString } from "@etiennea20/adr-misc";
+
+const PICKUP_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export function createPickupCode(): string {
+  return randomString(6, { alphabet: PICKUP_ALPHABET }); // par exemple "K7PX2M"
+}
+```
+
+## Créer un identifiant unique
+
+`createUuid` produit un UUID v4 à partir de l'API Web Crypto, disponible dans le navigateur
+comme dans Node. C'est la **seule** fonction de la catégorie adaptée à un usage sensible.
+
+```ts title="src/loans/create-loan-draft.ts"
+import { createUuid } from "@etiennea20/adr-misc";
+
+interface ILoanDraft {
+  id: string;
+  bookId: string;
+  memberId: string;
+}
+
+export function createLoanDraft(bookId: string, memberId: string): ILoanDraft {
+  return { id: createUuid(), bookId, memberId };
+}
+```
+
+## Rendre un tirage reproductible
+
+`createSeededRandom` crée un générateur déterministe : la même graine (nombre ou texte) donne
+toujours la même suite. Utile pour un test, pour des données de démonstration stables ou pour
+une sélection « du jour » identique pour tous les adhérents.
+
+```ts title="src/catalog/daily-selection.ts"
+import { createSeededRandom, sample } from "@etiennea20/adr-misc";
+
+interface IBook {
+  id: string;
+  title: string;
+}
+
+/** Même sélection pour tous les adhérents un jour donné (`isoDate` : "2026-01-15"). */
+export function dailySelection(books: readonly IBook[], isoDate: string): IBook[] {
+  return sample(books, 5, createSeededRandom(isoDate));
+}
+```
+
+```ts title="src/catalog/daily-selection.test.ts"
+import { createSeededRandom, randomInt } from "@etiennea20/adr-misc";
+import { expect, it } from "vitest";
+
+it("tire toujours le même numéro de place pour la même graine", () => {
+  const first = randomInt(1, 40, createSeededRandom(42));
+  expect(randomInt(1, 40, createSeededRandom(42))).toBe(first);
+});
+```
+
+## Récapitulatif
+
+| Élément                | Rôle                                                            |
+| ---------------------- | --------------------------------------------------------------- |
+| `createSeededRandom`   | Générateur déterministe à partir d'une graine (nombre ou texte) |
+| `createUuid`           | UUID v4 cryptographiquement sûr (API Web Crypto)                |
+| `IRandomStringOptions` | Options de `randomString` : alphabet et générateur              |
+| `randomFloat`          | Nombre décimal dans `[min, max)`                                |
+| `randomInt`            | Entier entre deux bornes incluses                               |
+| `randomItem`           | Un élément d'une liste (`undefined` si elle est vide)           |
+| `randomString`         | Chaîne aléatoire à partir d'un alphabet                         |
+| `sample`               | Plusieurs éléments distincts (tirage sans remise)               |
+| `shuffle`              | Liste mélangée (Fisher-Yates), sans modifier l'original         |
+
+## Quand ne pas l'utiliser
+
+- Pour un **secret** (mot de passe, jeton de réinitialisation, clé d'API) : `randomString`,
+  `randomInt` et les autres tirages reposent sur `Math.random`, qui n'est pas
+  cryptographiquement sûr. Utiliser `createUuid` ou directement l'API Web Crypto.
+- `createSeededRandom` est prévisible par construction : il sert aux tests et aux démos, jamais
+  à un tirage au sort qui doit rester impossible à anticiper.
+- `createUuid` lève une erreur si l'environnement n'expose pas l'API Web Crypto (navigateur
+  très ancien) ; Node 18 et plus et les navigateurs actuels la fournissent.

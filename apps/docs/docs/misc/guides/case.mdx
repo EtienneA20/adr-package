@@ -1,0 +1,121 @@
+---
+title: Changement de casse
+sidebar_label: Casse
+sidebar_position: 9
+---
+
+# Changement de casse
+
+La catégorie `case` convertit un texte d'une convention de nommage à une autre (`camelCase`,
+`PascalCase`, `snake_case`, `kebab-case`, `CONSTANT_CASE`) et met en forme les majuscules d'un
+libellé ou d'un titre (`capitalize`, `uncapitalize`, `toTitleCase`).
+
+Toutes les conversions découpent les mots de la même façon : sur les espaces, tirets,
+underscores, la ponctuation et les changements de casse. Les sigles comptent comme un mot
+(`XMLHttpRequest` donne `xml`, `Http`, `Request`), les chiffres restent collés au mot qui les
+précède et les accents sont conservés. Les exemples ci-dessous sont tirés d'une application
+fictive « Bibliothèque ».
+
+## Passer d'une API `snake_case` à des objets `camelCase`
+
+Une API ou une base de données renvoie souvent des clés `snake_case`. `toCamelCase` et
+`toSnakeCase` convertissent les clés dans un sens puis dans l'autre.
+
+```ts title="src/api/convert-keys.ts"
+import { toCamelCase, toSnakeCase } from "@etiennea20/adr-misc";
+
+export function keysToCamelCase(row: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [toCamelCase(key), value]));
+}
+
+export function keysToSnakeCase(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(body).map(([key, value]) => [toSnakeCase(key), value]));
+}
+
+keysToCamelCase({ book_id: "b-42", due_date: "2026-01-15" });
+// { bookId: "b-42", dueDate: "2026-01-15" }
+keysToSnakeCase({ memberId: "m-7", lateFeeInCents: 150 });
+// { member_id: "m-7", late_fee_in_cents: 150 }
+```
+
+## Dériver des noms de fichiers, de classes et de constantes
+
+`toKebabCase` produit un nom de fichier ou une classe CSS à partir d'un nom de composant,
+`toPascalCase` fait l'inverse, et `toConstantCase` donne une clé d'énumération ou un nom de
+variable d'environnement.
+
+```ts title="scripts/generate-component.ts"
+import { toConstantCase, toKebabCase, toPascalCase } from "@etiennea20/adr-misc";
+
+toKebabCase("LoanHistoryTable"); // "loan-history-table"
+toPascalCase("loan-history-table"); // "LoanHistoryTable"
+toConstantCase("maxLoanCount"); // "MAX_LOAN_COUNT"
+toConstantCase("en retard"); // "EN_RETARD"
+```
+
+Les accents sont conservés (`toCamelCase("état du livre")` donne `étatDuLivre`). Pour un
+identifiant strictement ASCII, appliquer d'abord `removeAccents` (catégorie `string`) ; pour un
+segment d'URL construit à partir d'un texte libre, préférer `slugify`.
+
+## Mettre en forme des libellés
+
+`capitalize` met une majuscule au premier caractère alphanumérique, en ignorant la ponctuation
+de tête ; avec `lowerRest`, il normalise aussi un nom saisi en majuscules. `uncapitalize`
+permet d'insérer un libellé au milieu d'une phrase.
+
+```ts title="src/members/member-label.ts"
+import { capitalize, uncapitalize } from "@etiennea20/adr-misc";
+
+capitalize("élodie"); // "Élodie"
+capitalize("DUPONT", { lowerRest: true }); // "Dupont"
+capitalize("« bonjour »"); // "« Bonjour »"
+
+const action = "Supprimer le livre";
+`Voulez-vous ${uncapitalize(action)} ?`; // "Voulez-vous supprimer le livre ?"
+```
+
+## Normaliser un titre d'ouvrage
+
+`toTitleCase` met une majuscule au début de chaque mot en respectant les usages français :
+chaque partie d'un mot composé prend une majuscule (« Monte-Cristo »), les élisions sont
+respectées (« L’Île », mais « Aujourd’hui »). Avec `lowercaseMinorWords`, les articles,
+prépositions et conjonctions restent en minuscules, sauf en tête du titre ; `minorWords`
+remplace la liste de ces petits mots.
+
+```ts title="src/books/normalize-title.ts"
+import { toTitleCase } from "@etiennea20/adr-misc";
+
+toTitleCase("le petit prince"); // "Le Petit Prince"
+toTitleCase("l’île mystérieuse"); // "L’Île Mystérieuse"
+toTitleCase("le comte de monte-cristo", { lowercaseMinorWords: true });
+// "Le Comte de Monte-Cristo"
+toTitleCase("vingt mille lieues sous les mers", { lowercaseMinorWords: true });
+// "Vingt Mille Lieues sous les Mers"
+```
+
+## Récapitulatif
+
+| Élément          | Rôle                                                                    |
+| ---------------- | ----------------------------------------------------------------------- |
+| `capitalize`     | Mettre en majuscule la première lettre (option `lowerRest`)             |
+| `toCamelCase`    | Convertir en `camelCase` : `nomDuChamp`                                 |
+| `toConstantCase` | Convertir en `CONSTANT_CASE` : `NOM_DU_CHAMP`                           |
+| `toKebabCase`    | Convertir en `kebab-case` : `nom-du-champ`                              |
+| `toPascalCase`   | Convertir en `PascalCase` : `NomDuChamp`                                |
+| `toSnakeCase`    | Convertir en `snake_case` : `nom_du_champ`                              |
+| `toTitleCase`    | Mettre une majuscule à chaque mot d'un titre, selon les usages français |
+| `uncapitalize`   | Mettre en minuscule la première lettre                                  |
+
+Les options sont décrites par `ICapitalizeOptions` et `IToTitleCaseOptions`.
+
+## Points d'attention
+
+- **Les sigles ne survivent pas aux conversions** : `toPascalCase("userID")` donne `UserId`, et
+  `toTitleCase` transforme « SNCF » en « Sncf ». Ne pas appliquer `toTitleCase` à un texte qui
+  contient des sigles.
+- **Les conversions ne sont pas toujours réversibles** : la ponctuation et les apostrophes
+  disparaissent (`toCamelCase("Nombre d’emprunts")` donne `nombreDEmprunts`).
+- **Les accents sont conservés** : un identifiant destiné à du code ou à une URL doit passer par
+  `removeAccents` ou `slugify` (catégorie `string`).
+- **Un texte sans lettre ni chiffre** donne une chaîne vide avec les fonctions `to…Case`, et est
+  renvoyé inchangé par `capitalize` et `uncapitalize`.

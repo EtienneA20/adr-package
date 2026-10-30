@@ -6,9 +6,8 @@ sidebar_position: 1
 
 # @etiennea20/adr-misc
 
-Utilitaires TypeScript partagés entre le front (navigateur) et le back (Node, NestJS) : parsing
-(dates avec dayjs, durées, nombres), utilitaires de base et énumérations. ESM et CJS, sans API
-propre à un environnement.
+Utilitaires TypeScript partagés entre le front (navigateur) et le back (Node, NestJS). ESM et
+CJS, sans API propre à un environnement, sans dépendance React ni NestJS.
 
 ```sh
 pnpm add @etiennea20/adr-misc dayjs
@@ -16,5 +15,44 @@ pnpm add @etiennea20/adr-misc dayjs
 
 `dayjs` est une peerDependency : votre projet fournit l'instance (et ses plugins).
 
-- **Guides** : cas d'usage, avec un exemple d'application fictive.
-- **Référence API** : générée depuis le TSDoc du code source.
+```ts
+import { formatCurrency, groupBy, isSiret, retry } from "@etiennea20/adr-misc";
+```
+
+## Principes
+
+- **Un seul point d'entrée** : tout s'importe depuis `@etiennea20/adr-misc`, le tree-shaking
+  ne garde que ce que vous utilisez (`sideEffects: false`).
+- **Fonctions pures et immuables** : aucun argument n'est modifié.
+- **Français par défaut** : locale `fr-FR`, euro, dates `DD/MM/YYYY`, jours fériés français,
+  messages d'erreur en français ; tout est surchargeable par option.
+- **Testable** : ce qui dépend de l'heure accepte une date de référence, ce qui est aléatoire
+  accepte un générateur injecté.
+
+## Catégories
+
+| Catégorie                                  | Contenu                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------- |
+| [Assertions et erreurs](/misc/guides/core) | `invariant`, `assertNever`, `Result`, `tryCatch`…                |
+| [Gardes de type](/misc/guides/guards)      | `isDefined`, `isPlainObject`, `isEmpty`…                         |
+| [Types utilitaires](/misc/guides/types)    | `DeepPartial`, `Brand`, `PartialBy`…                             |
+| [Fonctions](/misc/guides/function)         | `once`, `memoize`, `pipe`…                                       |
+| [Asynchrone](/misc/guides/async)           | `retry`, `debounce`, `throttle`, `withTimeout`, `mapConcurrent`… |
+| [Tableaux](/misc/guides/array)             | `chunk`, `groupBy`, `sortBy`, `partition`, `moveItem`…           |
+| [Objets](/misc/guides/object)              | `pick`, `omit`, `deepMerge`, `isEqual`, `getPath`…               |
+| [Chaînes](/misc/guides/string)             | `slugify`, `truncate`, `pluralize`, `matchesSearch`…             |
+| [Casse](/misc/guides/case)                 | `toCamelCase`, `toKebabCase`, `toTitleCase`…                     |
+| [Calculs](/misc/guides/math)               | `clamp`, `round`, `median`, `percentage`…                        |
+| [Aléatoire](/misc/guides/random)           | `randomInt`, `shuffle`, `createSeededRandom`, `createUuid`…      |
+| [Parsing](/misc/guides/parsing)            | `parseNumber`, `parseDate`, `parseDuration`, `parseCsv`…         |
+| [Formatage](/misc/guides/format)           | `formatCurrency`, `formatBytes`, `formatRelativeTime`…           |
+| [Dates](/misc/guides/date)                 | `getPublicHolidaysFr`, `addBusinessDays`, `getIsoWeek`…          |
+| [Énumérations](/misc/guides/enums)         | `EWeekDay`, `EHttpStatus`, `EMimeType`, `getEnumValues`…         |
+| [Validation](/misc/guides/validation)      | `isEmail`, `isSiret`, `isIban`, `isNir`, `getPasswordStrength`…  |
+| [URL](/misc/guides/url)                    | `buildQueryString`, `parseQueryString`, `joinUrl`…               |
+| [Fichiers](/misc/guides/file)              | `getFileExtension`, `sanitizeFileName`, `getMimeType`…           |
+| [Couleurs](/misc/guides/color)             | `hexToRgb`, `getContrastRatio`, `getReadableTextColor`…          |
+
+- **Guides** : un par catégorie, avec des exemples tirés d'une application fictive
+  « Bibliothèque ».
+- **Référence API** : générée depuis le TSDoc du code source (signatures, paramètres, erreurs).

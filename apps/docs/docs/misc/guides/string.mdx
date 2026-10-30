@@ -1,0 +1,234 @@
+---
+title: Chaînes de caractères
+sidebar_label: Chaînes
+sidebar_position: 8
+---
+
+# Chaînes de caractères
+
+La catégorie `string` regroupe les utilitaires de texte dont une application française a
+besoin au quotidien : recherche et tri insensibles aux accents, accord des pluriels, messages
+paramétrés, troncature, initiales, masquage de données sensibles, slugs d'URL et échappement
+HTML ou d'expressions régulières.
+
+Toutes les fonctions sont pures, sans dépendance, et fonctionnent aussi bien dans le
+navigateur que dans Node. Les exemples ci-dessous sont tirés d'une application fictive
+« Bibliothèque ».
+
+## Rechercher dans le catalogue
+
+`matchesSearch` filtre une liste à partir d'un champ de recherche : chaque mot de la requête
+doit apparaître dans le texte, dans n'importe quel ordre. La comparaison ignore la casse, les
+accents, les ligatures et les types d'apostrophes : « oeuvre » trouve « L’Œuvre au noir » et
+« l'ile » trouve « L’Île mystérieuse ». Pour chercher dans plusieurs champs, il suffit de les
+concaténer avec une espace.
+
+```ts title="src/books/filter-books.ts"
+import { matchesSearch } from "@etiennea20/adr-misc";
+
+interface IBook {
+  id: string;
+  title: string;
+  author: string;
+}
+
+export function filterBooks(books: readonly IBook[], query: string): IBook[] {
+  return books.filter((book) => matchesSearch(`${book.title} ${book.author}`, query));
+}
+
+// filterBooks(catalogue, "hugo miserables") trouve « Les Misérables » de Victor Hugo.
+```
+
+`highlightMatches` applique la même règle pour découper le titre en segments à surligner. La
+concaténation des segments redonne exactement le texte d'origine, accents et casse compris.
+
+```tsx title="src/books/book-title.tsx"
+import { highlightMatches } from "@etiennea20/adr-misc";
+
+export function BookTitle({ title, query }: { title: string; query: string }) {
+  return (
+    <span>
+      {highlightMatches(title, query).map((segment, index) =>
+        segment.match ? <mark key={index}>{segment.text}</mark> : segment.text,
+      )}
+    </span>
+  );
+}
+
+// highlightMatches("Les Misérables", "mise")
+// [{ text: "Les ", match: false }, { text: "Misé", match: true }, { text: "rables", match: false }]
+```
+
+## Trier des titres comme un humain
+
+`sort()` sans argument compare les codes Unicode : les majuscules passent avant les minuscules
+et « Étude » se retrouve après « Zola ». `compareStrings` utilise l'ordre alphabétique
+français, ignore la casse et les accents, et range les nombres dans l'ordre naturel.
+
+```ts title="src/books/sort-titles.ts"
+import { compareStrings } from "@etiennea20/adr-misc";
+
+const titles = ["Tome 10", "tome 2", "Zola", "Étude", "école"];
+
+[...titles].sort(); // ["Tome 10", "Zola", "tome 2", "Étude", "école"]
+[...titles].sort(compareStrings); // ["école", "Étude", "tome 2", "Tome 10", "Zola"]
+```
+
+## Composer des libellés et des messages
+
+`pluralize` applique la règle française (singulier en dessous de 2, donc « 0 retard ») et
+déduit les pluriels réguliers ; un pluriel irrégulier se passe en argument. Avec
+`includeCount`, le nombre est formaté en français et suivi d'une espace insécable.
+
+```ts title="src/loans/loan-summary.ts"
+import { pluralize } from "@etiennea20/adr-misc";
+
+export function loanSummary(loanCount: number, lateCount: number): string {
+  const loans = pluralize(loanCount, "livre emprunté", {
+    plural: "livres empruntés",
+    includeCount: true,
+  });
+  const late = pluralize(lateCount, "retard", { includeCount: true });
+  return `${loans}, ${late}`;
+}
+
+// loanSummary(3, 0) → "3 livres empruntés, 0 retard" (espaces insécables après les nombres)
+```
+
+`interpolate` remplace les marqueurs `{cle}` d'un modèle, par exemple un gabarit de
+notification stocké en base. Les dates et les nombres se formatent avant l'appel ; l'option
+`missing` choisit entre garder le marqueur, le vider ou lever une erreur.
+
+```ts title="src/notifications/reminder.ts"
+import { interpolate } from "@etiennea20/adr-misc";
+
+const TEMPLATE = "Bonjour {prenom}, « {titre} » est à rendre le {date}.";
+
+export function reminderMessage(firstName: string, title: string, dueDate: string): string {
+  return interpolate(
+    TEMPLATE,
+    { prenom: firstName, titre: title, date: dueDate },
+    {
+      missing: "throw",
+    },
+  );
+}
+
+// reminderMessage("Inès", "Le Horla", "15/01/2026")
+// "Bonjour Inès, « Le Horla » est à rendre le 15/01/2026."
+```
+
+## Afficher un texte dans un espace limité
+
+`truncate` coupe un texte trop long sans jamais dépasser la longueur demandée, suffixe compris,
+et sans laisser de virgule ou d'espace avant les points de suspension. `wordBoundary` évite de
+couper un mot en deux. `countWords` donne la longueur d'un résumé, ponctuation isolée exclue.
+
+```ts title="src/books/book-card.ts"
+import { countWords, truncate } from "@etiennea20/adr-misc";
+
+const summary = "Un aviateur, tombé en panne dans le désert du Sahara, rencontre un petit prince.";
+
+truncate(summary, 30); // "Un aviateur, tombé en panne d…"
+truncate(summary, 30, { wordBoundary: true }); // "Un aviateur, tombé en panne…"
+countWords(summary); // 14
+```
+
+## Avatars et données confidentielles
+
+`getInitials` fournit le texte d'un avatar sans photo : les particules et les élisions sont
+ignorées, les noms composés comptent pour chaque partie (désactivable).
+
+```ts title="src/members/member-avatar.ts"
+import { getInitials } from "@etiennea20/adr-misc";
+
+getInitials("Marie-Claire de La Fontaine"); // "MCF"
+getInitials("Marie-Claire de La Fontaine", { maxLetters: 2 }); // "MF"
+getInitials("Jean d’Ormesson"); // "JO"
+```
+
+`maskString` affiche une donnée sensible de façon reconnaissable sans la révéler. Les
+caractères listés dans `preserve` gardent la forme de la valeur.
+
+```ts title="src/members/member-contact.ts"
+import { maskString } from "@etiennea20/adr-misc";
+
+maskString("0612345678", { visibleStart: 2, visibleEnd: 2 }); // "06******78"
+maskString("ines.martin@exemple.fr", { visibleStart: 2, visibleEnd: 11, preserve: "@." });
+// "in**.******@exemple.fr"
+```
+
+## URL, noms de fichiers et saisies
+
+`slugify` transforme un titre en segment d'URL ou en nom de fichier ASCII ; `removeAccents`
+retire seulement les accents et décompose les ligatures, en conservant la casse et la
+ponctuation. `normalizeWhitespace` nettoie une saisie ou un copier-coller avant de l'enregistrer
+ou de la comparer (espaces multiples, tabulations, retours à la ligne, insécables).
+
+```ts title="src/books/book-url.ts"
+import { normalizeWhitespace, removeAccents, slugify } from "@etiennea20/adr-misc";
+
+slugify("L’Île mystérieuse : tome 2"); // "l-ile-mysterieuse-tome-2"
+removeAccents("Cœur d’Œdipe"); // "Coeur d’OEdipe"
+normalizeWhitespace("  Le   Petit\tPrince\n"); // "Le Petit Prince"
+```
+
+## Échapper du HTML et des expressions régulières
+
+`escapeHtml` protège un texte non maîtrisé avant de l'insérer dans du HTML construit à la main
+(gabarit d'e-mail, export) ; `unescapeHtml` fait l'inverse pour afficher en texte brut un
+contenu reçu échappé. `escapeRegExp` permet d'insérer une saisie dans une `RegExp` construite
+dynamiquement : elle est alors recherchée littéralement.
+
+```ts title="src/notifications/email-body.ts"
+import { escapeHtml, escapeRegExp, interpolate, unescapeHtml } from "@etiennea20/adr-misc";
+
+const comment = `<script>alert("pirate")</script>`;
+interpolate("<p>Commentaire : {comment}</p>", { comment: escapeHtml(comment) });
+// "<p>Commentaire : &lt;script&gt;alert(&quot;pirate&quot;)&lt;/script&gt;</p>"
+
+unescapeHtml("L&rsquo;&Eacute;tranger"); // "L’Étranger"
+
+const pattern = new RegExp(`^${escapeRegExp("Tome 2 (poche)")}$`, "i");
+pattern.test("tome 2 (poche)"); // true
+```
+
+## Récapitulatif
+
+| Élément               | Rôle                                                                  |
+| --------------------- | --------------------------------------------------------------------- |
+| `compareStrings`      | Comparer deux textes dans l'ordre alphabétique français (tri)         |
+| `countWords`          | Compter les mots d'un texte                                           |
+| `escapeHtml`          | Échapper `&`, `<`, `>`, `"` et `'` avant une insertion dans du HTML   |
+| `escapeRegExp`        | Échapper les caractères spéciaux d'une expression régulière           |
+| `getInitials`         | Calculer les initiales d'un nom de personne                           |
+| `highlightMatches`    | Découper un texte en segments à surligner selon une recherche         |
+| `interpolate`         | Remplacer les marqueurs `{cle}` d'un modèle de texte                  |
+| `maskString`          | Masquer une valeur sensible (IBAN, téléphone, e-mail)                 |
+| `matchesSearch`       | Tester si un texte correspond à une recherche, sans casse ni accents  |
+| `normalizeWhitespace` | Réduire toute suite d'espaces à une espace simple et rogner les bords |
+| `pluralize`           | Accorder un mot selon un nombre, avec la règle française              |
+| `removeAccents`       | Retirer les accents et décomposer les ligatures                       |
+| `slugify`             | Transformer un texte libre en slug d'URL ou de nom de fichier         |
+| `truncate`            | Tronquer un texte trop long en ajoutant un suffixe                    |
+| `unescapeHtml`        | Décoder les entités HTML d'un texte                                   |
+
+Les options de chaque fonction sont décrites par une interface exportée (`ITruncateOptions`,
+`IPluralizeOptions`…), et `highlightMatches` renvoie des `IHighlightSegment`.
+
+## Points d'attention
+
+- **React échappe déjà le texte** rendu dans le JSX : `escapeHtml` ne sert que pour du HTML
+  construit à la main. Il ne suffit pas pour une URL (`href`), du JavaScript ou du CSS.
+- **`unescapeHtml` produit du texte brut**, pas du HTML sûr : ne jamais réinsérer son résultat
+  tel quel dans du HTML.
+- **`maskString` masque à l'affichage seulement** : la donnée reste présente en clair là où
+  elle a été chargée. Masquer côté serveur si le client ne doit pas la connaître.
+- **`normalizeWhitespace` retire les insécables** de la typographie française (avant « : »,
+  dans les guillemets) : à réserver aux textes comparés ou enregistrés, pas à l'affichage.
+- **`slugify` supprime les caractères non latins** : un titre entièrement en cyrillique ou en
+  chinois donne une chaîne vide, à prévoir (identifiant de secours).
+- **`pluralize` n'accorde que le dernier mot** par la règle régulière : fournir le pluriel pour
+  une expression (« livre emprunté ») ou un pluriel irrégulier (« cheval »).
+- **`truncate` compte en unités UTF-16** (`string.length`), comme `maxlength` en HTML : un emoji
+  compte pour deux, mais n'est jamais coupé en deux.

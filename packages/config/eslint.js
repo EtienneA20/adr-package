@@ -155,7 +155,8 @@ const documentationConfigs = [
     files: SOURCE_FILES,
     ignores: TEST_FILES,
     plugins: { jsdoc: jsdocPlugin, tsdoc },
-    settings: { jsdoc: { mode: "typescript" } },
+    // En mode typescript, jsdoc impose `@template` ; TSDoc et `pnpm check:skills` exigent `@typeParam`.
+    settings: { jsdoc: { mode: "typescript", tagNamePreference: { typeParam: "typeParam" } } },
     rules: {
       "tsdoc/syntax": "error",
       "jsdoc/require-jsdoc": [

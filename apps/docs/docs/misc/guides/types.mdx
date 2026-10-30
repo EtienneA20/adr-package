@@ -1,0 +1,186 @@
+---
+title: Types utilitaires
+sidebar_label: Types utilitaires
+sidebar_position: 3
+---
+
+# Types utilitaires
+
+La catégorie `types` ne contient **que des types** : aucun code n'est ajouté au bundle. Elle
+complète les types utilitaires natifs de TypeScript (`Partial`, `Pick`, `Omit`…) pour les
+besoins courants : valeurs absentes, objets imbriqués, identifiants nominaux, clés filtrées par
+type, rappels synchrones ou asynchrones.
+
+Ils s'importent avec `import type` :
+
+```ts
+import type { Brand, DeepPartial, Maybe } from "@etiennea20/adr-misc";
+```
+
+Les exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Valeurs absentes : `Nullable` et `Maybe`
+
+`Nullable` ajoute `null` (colonne SQL nullable), `Maybe` ajoute `null` et `undefined` (donnée
+qui peut manquer de plusieurs façons).
+
+```ts title="src/books/book.ts"
+import type { Maybe, Nullable } from "@etiennea20/adr-misc";
+
+export interface IBook {
+  id: string;
+  title: string;
+  subtitle: Nullable<string>;
+  coverUrl?: Maybe<string>;
+}
+
+export function displayTitle(book: IBook): string {
+  return book.subtitle === null ? book.title : `${book.title} : ${book.subtitle}`;
+}
+```
+
+## Identifiants nominaux avec `Brand`
+
+Deux identifiants de type `string` sont interchangeables pour TypeScript. `Brand` les rend
+incompatibles : impossible de passer l'identifiant d'un adhérent là où celui d'un livre est
+attendu. La marque n'existe qu'à la compilation.
+
+```ts title="src/ids.ts"
+import type { Brand } from "@etiennea20/adr-misc";
+
+export type BookId = Brand<string, "BookId">;
+export type MemberId = Brand<string, "MemberId">;
+
+export function toBookId(value: string): BookId {
+  if (!value.startsWith("b-")) {
+    throw new Error(`Identifiant de livre invalide : ${value}`);
+  }
+  return value as BookId;
+}
+
+export declare function borrowBook(bookId: BookId, memberId: MemberId): void;
+// borrowBook(memberId, bookId); // erreur de compilation : arguments inversés
+```
+
+## Créer ou modifier un objet : `PartialBy`, `RequiredBy`, `DeepPartial`
+
+`PartialBy` rend facultatifs quelques champs (ceux qui ont une valeur par défaut),
+`RequiredBy` en rend obligatoires, `DeepPartial` rend tout facultatif récursivement (patch d'une
+configuration imbriquée).
+
+```ts title="src/loans/create-loan.ts"
+import type { PartialBy } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  id: string;
+  bookId: string;
+  memberId: string;
+  borrowedAt: Date;
+  days: number;
+}
+
+export function createLoan(input: PartialBy<ILoan, "id" | "borrowedAt" | "days">): ILoan {
+  return {
+    id: input.id ?? `loan-${input.bookId}-${input.memberId}`,
+    borrowedAt: input.borrowedAt ?? new Date(),
+    days: input.days ?? 21,
+    bookId: input.bookId,
+    memberId: input.memberId,
+  };
+}
+```
+
+```ts title="src/settings/library-settings.ts"
+import type { DeepPartial, DeepReadonly } from "@etiennea20/adr-misc";
+
+interface ILibrarySettings {
+  loans: { maxDays: number; maxRenewals: number };
+  lateFees: { perDay: number; max: number };
+}
+
+const DEFAULT_SETTINGS: DeepReadonly<ILibrarySettings> = {
+  loans: { maxDays: 21, maxRenewals: 1 },
+  lateFees: { perDay: 0.2, max: 10 },
+};
+
+export function withSettings(override: DeepPartial<ILibrarySettings>): ILibrarySettings {
+  return {
+    loans: { ...DEFAULT_SETTINGS.loans, ...override.loans },
+    lateFees: { ...DEFAULT_SETTINGS.lateFees, ...override.lateFees },
+  };
+}
+```
+
+## Dériver des types : `ValueOf`, `KeysOfType`
+
+`ValueOf` est le pendant de `keyof` : il donne l'union des valeurs d'un objet `as const`.
+`KeysOfType` donne les clés dont la valeur a un type donné.
+
+```ts title="src/books/sort-books.ts"
+import type { KeysOfType, ValueOf } from "@etiennea20/adr-misc";
+
+export const BOOK_STATUS = { AVAILABLE: "available", BORROWED: "borrowed" } as const;
+export type BookStatus = ValueOf<typeof BOOK_STATUS>; // "available" | "borrowed"
+
+interface IBook {
+  title: string;
+  pages: number;
+  copies: number;
+  status: BookStatus;
+}
+
+export function sortBooks(books: readonly IBook[], field: KeysOfType<IBook, number>): IBook[] {
+  return [...books].sort((a, b) => a[field] - b[field]);
+}
+```
+
+## Listes et rappels : `NonEmptyArray`, `MaybePromise`
+
+`NonEmptyArray` refuse le tableau vide à la compilation. `MaybePromise` type un rappel qui peut
+être synchrone ou asynchrone.
+
+```ts title="src/notifications/notify-late-members.ts"
+import type { MaybePromise, NonEmptyArray } from "@etiennea20/adr-misc";
+
+type Sender = (email: string, message: string) => MaybePromise<void>;
+
+export async function notifyLateMembers(
+  emails: NonEmptyArray<string>,
+  send: Sender,
+): Promise<void> {
+  for (const email of emails) {
+    await send(email, "Votre emprunt est en retard.");
+  }
+}
+```
+
+## Récapitulatif
+
+| Élément         | Rôle                                                                  |
+| --------------- | --------------------------------------------------------------------- |
+| `Brand`         | Type nominal : rend incompatibles deux types de même structure        |
+| `DeepPartial`   | Toutes les propriétés facultatives, récursivement                     |
+| `DeepReadonly`  | Tout en lecture seule, récursivement (tableaux, `Map`, `Set` compris) |
+| `KeysOfType`    | Clés dont la valeur est assignable à un type donné                    |
+| `Maybe`         | Ajoute `null` et `undefined`                                          |
+| `MaybePromise`  | Valeur immédiate ou promesse de cette valeur                          |
+| `Mutable`       | Retire `readonly` (un seul niveau)                                    |
+| `NonEmptyArray` | Tableau d'au moins un élément                                         |
+| `Nullable`      | Ajoute `null`                                                         |
+| `PartialBy`     | Rend facultatives certaines clés                                      |
+| `Prettify`      | Aplatit un type composé pour un affichage lisible                     |
+| `Primitive`     | Union des types primitifs JavaScript                                  |
+| `RequiredBy`    | Rend obligatoires certaines clés                                      |
+| `ValueOf`       | Union des valeurs d'un objet ou des éléments d'un tableau             |
+
+## Points d'attention
+
+- Ces types n'existent qu'à la compilation : `DeepReadonly` n'empêche pas une mutation à
+  l'exécution (combiner avec `Object.freeze` si nécessaire) et `Brand` ne valide rien (créer la
+  valeur marquée dans une fonction qui vérifie le format).
+- `PartialBy` et `RequiredBy` ne se distribuent pas sur une union : les appliquer à chaque
+  membre si besoin.
+- `KeysOfType` ne retient une propriété facultative que si le type cherché accepte
+  `undefined`.
+- Ne pas empiler les types récursifs sur des structures très profondes ou cycliques : le
+  compilateur peut ralentir. Un type explicite reste parfois plus lisible.
