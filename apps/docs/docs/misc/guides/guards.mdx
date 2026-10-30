@@ -1,0 +1,169 @@
+---
+title: Gardes de type
+sidebar_label: Gardes de type
+sidebar_position: 2
+---
+
+# Gardes de type
+
+La catégorie `guards` regroupe des **gardes de type** : des fonctions qui testent une valeur à
+l'exécution et indiquent à TypeScript le type obtenu (`value is string`…). Après le test, le
+compilateur sait ce que contient la variable, sans conversion (`as`) ni vérification en double.
+
+À utiliser dès qu'une valeur arrive avec un type trop large : données JSON, paramètres de
+requête, champs facultatifs, tableaux contenant des valeurs absentes, rappels synchrones ou
+asynchrones. Les exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Retirer les valeurs absentes d'une liste
+
+`isDefined` s'utilise directement comme prédicat de `filter` : le tableau obtenu n'a plus de
+`null` ni d'`undefined` dans son type. Contrairement à `filter(Boolean)`, les valeurs falsy
+légitimes (`0`, `""`, `false`) sont conservées.
+
+```ts title="src/loans/list-due-dates.ts"
+import { isDefined } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  id: string;
+  bookId: string;
+  dueAt?: Date | null;
+}
+
+export function listDueDates(loans: ILoan[]): Date[] {
+  return loans.map((loan) => loan.dueAt).filter(isDefined);
+}
+```
+
+## Accéder au premier élément sans `undefined`
+
+Avec `noUncheckedIndexedAccess`, `items[0]` est de type `T | undefined`. `isNonEmptyArray`
+garantit la présence d'au moins un élément.
+
+```ts title="src/members/oldest-loan.ts"
+import { isNonEmptyArray } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  bookId: string;
+  borrowedAt: Date;
+}
+
+export function oldestLoan(loans: readonly ILoan[]): ILoan | undefined {
+  if (!isNonEmptyArray(loans)) {
+    return undefined;
+  }
+  const sorted = [...loans].sort((a, b) => a.borrowedAt.getTime() - b.borrowedAt.getTime());
+  return isNonEmptyArray(sorted) ? sorted[0] : undefined;
+}
+```
+
+## Valider un corps de requête de type `unknown`
+
+Les gardes primitives (`isString`, `isNumber`, `isNonEmptyString`, `isValidDate`…) se
+combinent pour valider des données externes, après `isPlainObject` qui garantit un objet
+littéral.
+
+```ts title="src/books/parse-book-input.ts"
+import { isNonEmptyString, isNumber, isPlainObject } from "@etiennea20/adr-misc";
+
+interface IBookInput {
+  title: string;
+  pages: number;
+}
+
+export function parseBookInput(body: unknown): IBookInput | undefined {
+  if (!isPlainObject(body)) {
+    return undefined;
+  }
+  const { title, pages } = body;
+  if (!isNonEmptyString(title) || !isNumber(pages) || pages <= 0) {
+    return undefined;
+  }
+  return { title: title.trim(), pages };
+}
+```
+
+## Indexer un objet avec une clé venue de l'extérieur
+
+`isKeyOf` vérifie qu'une clé est une propriété **propre** de l'objet : une valeur comme
+`"toString"` ou `"__proto__"` est refusée, et la clé est ensuite typée `keyof T`.
+
+```ts title="src/books/status-label.ts"
+import { isKeyOf } from "@etiennea20/adr-misc";
+
+const STATUS_LABELS = {
+  available: "Disponible",
+  borrowed: "Emprunté",
+  lost: "Perdu",
+};
+
+export function statusLabel(status: string): string {
+  return isKeyOf(STATUS_LABELS, status) ? STATUS_LABELS[status] : "Statut inconnu";
+}
+```
+
+## Accepter un rappel synchrone ou asynchrone
+
+`isPromiseLike` distingue une valeur d'une promesse ; `isFunction` distingue une valeur d'une
+fonction qui la calcule.
+
+```ts title="src/loans/check-loan.ts"
+import { isFunction, isPromiseLike } from "@etiennea20/adr-misc";
+
+type LoanRule = (memberId: string) => boolean | Promise<boolean>;
+type Message = string | ((memberId: string) => string);
+
+export async function checkLoan(
+  memberId: string,
+  rule: LoanRule,
+  message: Message,
+): Promise<string | undefined> {
+  const result = rule(memberId);
+  const allowed = isPromiseLike(result) ? await result : result;
+  if (allowed) {
+    return undefined;
+  }
+  return isFunction(message) ? message(memberId) : message;
+}
+```
+
+## Savoir s'il y a quelque chose à afficher
+
+`isEmpty` traite d'un seul geste `null`, `undefined`, chaînes, tableaux, `Map`, `Set` et
+objets simples.
+
+```ts title="src/search/describe-filters.ts"
+import { isEmpty } from "@etiennea20/adr-misc";
+
+export function describeFilters(filters: Record<string, string>): string {
+  return isEmpty(filters) ? "Tous les livres" : `${Object.keys(filters).length} filtre(s)`;
+}
+```
+
+## Récapitulatif
+
+| Élément            | Rôle                                                                  |
+| ------------------ | --------------------------------------------------------------------- |
+| `isBoolean`        | Booléen primitif                                                      |
+| `isDefined`        | Ni `null` ni `undefined` (idéal avec `filter`)                        |
+| `isEmpty`          | Valeur absente, chaîne, tableau, `Map`, `Set` ou objet simple vide    |
+| `isFunction`       | Fonction (classique, fléchée, asynchrone, classe)                     |
+| `isKeyOf`          | Clé propre d'un objet, typée `keyof T`                                |
+| `isNil`            | `null` ou `undefined`                                                 |
+| `isNonEmptyArray`  | Tableau d'au moins un élément (premier élément typé sans `undefined`) |
+| `isNonEmptyString` | Chaîne non vide après suppression des espaces                         |
+| `isNumber`         | Nombre autre que `NaN` (`Infinity` accepté)                           |
+| `isObject`         | Objet non `null` et non tableau (instances de classes comprises)      |
+| `isPlainObject`    | Objet littéral ou sans prototype (instances de classes exclues)       |
+| `isPromiseLike`    | Objet ou fonction possédant une méthode `then`                        |
+| `isString`         | Chaîne primitive                                                      |
+| `isValidDate`      | Instance de `Date` valide (pas `Invalid Date`)                        |
+
+## Points d'attention
+
+- Une garde ne **convertit** rien : `isNumber("3")` vaut `false`, `isValidDate("2026-01-15")`
+  aussi. Convertir d'abord la saisie, puis tester le résultat.
+- `isEmpty` ne fait pas d'affinage de type et considère `0`, `false` et `" "` comme non vides.
+- `isObject` accepte les `Date`, `Map` et instances de classes ; utiliser `isPlainObject` avant
+  de parcourir ou de fusionner les clés d'un objet.
+- Pour une validation complète avec messages d'erreur détaillés (formulaire, API publique),
+  préférer un schéma de validation dédié : les gardes répondent seulement « oui » ou « non ».
