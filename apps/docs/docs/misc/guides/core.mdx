@@ -1,0 +1,153 @@
+---
+title: Assertions et gestion des erreurs
+sidebar_label: Assertions et erreurs
+sidebar_position: 1
+---
+
+# Assertions et gestion des erreurs
+
+La catégorie `core` regroupe les utilitaires de base dont dépend tout le reste d'une
+application : des **assertions** qui garantissent une hypothèse interne et affinent le type
+pour TypeScript, et des outils pour **traiter les erreurs** sans se soucier de ce qui a été
+levé (JavaScript permet de lever une chaîne, un objet, `undefined`…).
+
+À utiliser dans le code métier (services, composants, contrôleurs) dès qu'une valeur est
+censée exister, qu'un `switch` doit traiter tous les cas, ou qu'un `catch` doit afficher ou
+journaliser une erreur. Les exemples ci-dessous sont tirés d'une application fictive
+« Bibliothèque ».
+
+## Garantir qu'une valeur existe
+
+`invariant` vérifie qu'une condition est vraie ; `assertDefined` vérifie seulement qu'une
+valeur n'est ni `null` ni `undefined`. Préférer `assertDefined` dès que la valeur peut valoir
+`0`, `""` ou `false` : une pénalité de retard de 0 € est une valeur valide.
+
+```ts title="src/loans/compute-late-fee.ts"
+import { assertDefined, invariant } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  id: string;
+  bookId: string;
+  memberId: string;
+}
+
+export function computeLateFee(
+  loans: ILoan[],
+  feesByBookId: Map<string, number>,
+  loanId: string,
+): number {
+  const loan = loans.find((candidate) => candidate.id === loanId);
+  invariant(loan, `Emprunt ${loanId} introuvable`);
+
+  const fee = feesByBookId.get(loan.bookId); // number | undefined
+  assertDefined(fee, `Tarif du livre ${loan.bookId} introuvable`);
+
+  return fee; // `fee` est un `number`, même s'il vaut 0
+}
+```
+
+## Traiter tous les cas d'une union
+
+Dans la branche `default` d'un `switch`, `assertNever` fait échouer la compilation si un cas
+de l'union n'est pas traité, et lève une erreur si une valeur inattendue arrive malgré tout
+(donnée venant d'une ancienne version de l'API, par exemple).
+
+```ts title="src/loans/get-status-label.ts"
+import { assertNever } from "@etiennea20/adr-misc";
+
+type LoanStatus = "active" | "returned" | "late";
+
+export function getStatusLabel(status: LoanStatus): string {
+  switch (status) {
+    case "active":
+      return "En cours";
+    case "returned":
+      return "Rendu";
+    case "late":
+      return "En retard";
+    default:
+      // Ajouter "lost" à `LoanStatus` fait échouer la compilation ici.
+      return assertNever(status);
+  }
+}
+```
+
+## Afficher ou journaliser une erreur inconnue
+
+Dans un `catch`, la variable est de type `unknown`. `getErrorMessage` en extrait un message
+lisible (avec un message de repli) ; `toError` la convertit en vraie `Error` en conservant la
+valeur d'origine dans `cause`.
+
+```ts title="src/catalog/sync-catalog.ts"
+import { getErrorMessage, toError } from "@etiennea20/adr-misc";
+
+export async function borrow(bookId: string): Promise<void> {
+  try {
+    await api.post(`/books/${bookId}/loans`);
+  } catch (error) {
+    showToast(getErrorMessage(error, "Impossible d'emprunter ce livre."));
+  }
+}
+
+export async function syncCatalog(): Promise<void> {
+  try {
+    await importCatalog();
+  } catch (caught) {
+    const error = toError(caught);
+    logger.error(error.message, error.stack);
+    throw error;
+  }
+}
+```
+
+## Traiter l'échec comme une valeur avec `Result`
+
+Le type `Result` décrit le résultat d'une opération qui peut échouer : `ok` vaut `true` avec
+une `value`, ou `false` avec une `error`. `tryCatch` (synchrone) et `tryCatchAsync`
+(promesse ou fonction asynchrone) produisent un `Result` sans bloc `try`/`catch` : la variable
+reste `const` et l'appelant ne peut pas oublier le cas d'échec.
+
+```ts title="src/members/load-member-page.ts"
+import { tryCatch, tryCatchAsync, type Result } from "@etiennea20/adr-misc";
+
+interface IMember {
+  id: string;
+  name: string;
+}
+
+export async function loadMembers(): Promise<{ members: IMember[]; error?: string }> {
+  const result = await tryCatchAsync(() => api.get<IMember[]>("/members"));
+  if (!result.ok) {
+    return { members: [], error: result.error.message };
+  }
+  return { members: result.value };
+}
+
+export function readDraft(raw: string): Result<IMember> {
+  return tryCatch(() => JSON.parse(raw) as IMember);
+}
+```
+
+## Récapitulatif
+
+| Élément           | Rôle                                                                      |
+| ----------------- | ------------------------------------------------------------------------- |
+| `invariant`       | Lève une erreur si une condition est fausse ; affine le type              |
+| `assertDefined`   | Lève une erreur si une valeur vaut `null` ou `undefined` ; affine le type |
+| `assertNever`     | Garantit qu'une union est traitée entièrement (`switch` exhaustif)        |
+| `getErrorMessage` | Extrait un message lisible d'une valeur levée de type inconnu             |
+| `toError`         | Convertit une valeur levée en `Error` (valeur d'origine dans `cause`)     |
+| `Result`          | Type union « succès ou échec » discriminé par `ok`                        |
+| `tryCatch`        | Exécute une fonction synchrone et renvoie un `Result`                     |
+| `tryCatchAsync`   | Attend une promesse ou une fonction asynchrone et renvoie un `Result`     |
+
+## Points d'attention
+
+- `invariant`, `assertDefined` et `assertNever` signalent un **bug** (une hypothèse interne
+  violée). Ils ne remplacent pas la validation d'une saisie utilisateur, qui doit renvoyer un
+  message adapté (ou une exception HTTP côté NestJS).
+- `invariant` refuse aussi `0`, `""` et `false` : utiliser `assertDefined` pour une valeur
+  numérique ou textuelle qui peut être vide.
+- `tryCatchAsync` ne rejette jamais : ne pas l'entourer d'un `try`/`catch`, tester `result.ok`.
+- `toError` renvoie la même instance si la valeur est déjà une `Error` : la modifier modifie
+  l'erreur d'origine.
