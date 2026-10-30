@@ -1,0 +1,156 @@
+---
+title: Couleurs
+sidebar_label: Couleurs
+sidebar_position: 19
+---
+
+# Couleurs
+
+La catégorie `color` manipule des couleurs **hexadécimales** (`#rgb`, `#rgba`, `#rrggbb`,
+`#rrggbbaa`) : conversion vers et depuis des composantes RVB, variantes claires, foncées ou
+translucides d'une couleur de thème, mélange, contraste WCAG et couleur stable dérivée d'un
+texte. Les fonctions renvoient toujours une couleur en minuscules, au format `#rrggbb` (ou
+`#rrggbbaa` si elle est translucide), directement utilisable en CSS.
+
+À utiliser quand une couleur est une **donnée** (thème d'une catégorie de livres, couleur
+d'étiquette choisie par un bibliothécaire, avatar d'adhérent) et qu'il faut en dériver
+d'autres couleurs ou garantir la lisibilité d'un texte. Les exemples ci-dessous sont tirés
+d'une application fictive « Bibliothèque ».
+
+## Décliner une couleur de thème
+
+À partir d'une seule couleur par genre littéraire, `lightenColor`, `darkenColor` et
+`withAlpha` produisent le fond, la bordure et le voile d'une étiquette.
+
+```ts title="src/genres/genre-palette.ts"
+import { darkenColor, lightenColor, withAlpha } from "@etiennea20/adr-misc";
+
+interface IGenrePalette {
+  background: string;
+  border: string;
+  text: string;
+  overlay: string;
+}
+
+export function genrePalette(themeColor: string): IGenrePalette {
+  return {
+    background: lightenColor(themeColor, 0.9), // "#2563eb" → "#e9effd"
+    border: darkenColor(themeColor, 0.2), // "#2563eb" → "#1e4fbc"
+    text: darkenColor(themeColor, 0.5),
+    overlay: withAlpha(themeColor, 0.15),
+  };
+}
+```
+
+## Garantir un texte lisible sur un fond variable
+
+`getReadableTextColor` choisit, entre une couleur claire et une sombre, celle qui contraste le
+plus avec le fond. `getContrastRatio` vérifie ensuite le seuil WCAG : 4,5 pour un texte
+courant au niveau AA, 3 pour un grand texte.
+
+```ts title="src/labels/label-style.ts"
+import { getContrastRatio, getReadableTextColor } from "@etiennea20/adr-misc";
+
+/** Contraste minimal WCAG AA pour un texte courant. */
+const MIN_CONTRAST_AA = 4.5;
+
+export function labelStyle(background: string) {
+  const color = getReadableTextColor(background, { light: "#f8fafc", dark: "#0f172a" });
+  return {
+    backgroundColor: background,
+    color,
+    isAccessible: getContrastRatio(background, color) >= MIN_CONTRAST_AA,
+  };
+}
+```
+
+## Colorer automatiquement un avatar
+
+`stringToColor` dérive d'un texte une couleur **stable** : le même nom donne toujours la même
+couleur, dans le navigateur comme sur le serveur. Seule la teinte varie ; saturation et
+luminosité sont communes, d'où des couleurs homogènes.
+
+```ts title="src/members/member-avatar.ts"
+import { getReadableTextColor, stringToColor } from "@etiennea20/adr-misc";
+
+export function memberAvatar(firstName: string, lastName: string) {
+  const background = stringToColor(`${firstName} ${lastName}`);
+  return {
+    initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
+    background,
+    color: getReadableTextColor(background),
+  };
+}
+
+/** Variante pastel pour les fonds de cartes de genres. */
+export function genreCardColor(genre: string): string {
+  return stringToColor(genre, { saturation: 60, lightness: 85 });
+}
+```
+
+## Jauge de retard du vert au rouge
+
+`mixColors` mélange deux couleurs dans une proportion donnée, comme `mix()` de Sass.
+
+```ts title="src/loans/late-gauge-color.ts"
+import { mixColors } from "@etiennea20/adr-misc";
+
+/** Nombre de jours de retard à partir duquel la jauge est entièrement rouge. */
+const MAX_DAYS_LATE = 30;
+
+export function lateGaugeColor(daysLate: number): string {
+  const weight = Math.min(Math.max(daysLate / MAX_DAYS_LATE, 0), 1);
+  return mixColors("#16a34a", "#dc2626", weight);
+}
+```
+
+## Calculer sur les composantes
+
+`hexToRgb` décompose une couleur en `IRgbColor` (`r`, `g`, `b` de 0 à 255, `a` de 0 à 1 si
+précisée) ; `rgbToHex` fait l'inverse et arrondit les composantes décimales.
+
+```ts title="src/theme/to-css-rgb.ts"
+import { hexToRgb, rgbToHex } from "@etiennea20/adr-misc";
+
+export function toCssRgb(hex: string): string {
+  const { r, g, b, a = 1 } = hexToRgb(hex);
+  return `rgb(${r} ${g} ${b} / ${a})`;
+}
+
+export function toGrayscale(hex: string): string {
+  const { r, g, b, a } = hexToRgb(hex);
+  const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+  return rgbToHex({ r: gray, g: gray, b: gray, a });
+}
+```
+
+## Récapitulatif
+
+| Élément                     | Rôle                                                          |
+| --------------------------- | ------------------------------------------------------------- |
+| `darkenColor`               | Assombrit une couleur (mélange avec du noir)                  |
+| `getContrastRatio`          | Rapport de contraste WCAG entre deux couleurs (1 à 21)        |
+| `getLuminance`              | Luminance relative WCAG (0 à 1)                               |
+| `getReadableTextColor`      | Couleur de texte claire ou sombre la plus lisible sur un fond |
+| `hexToRgb`                  | Décompose une couleur hexadécimale en composantes             |
+| `IReadableTextColorOptions` | Options de `getReadableTextColor` : couleurs candidates       |
+| `IRgbColor`                 | Composantes `r`, `g`, `b` et opacité `a` facultative          |
+| `IStringToColorOptions`     | Options de `stringToColor` : saturation et luminosité         |
+| `lightenColor`              | Éclaircit une couleur (mélange avec du blanc)                 |
+| `mixColors`                 | Mélange deux couleurs dans une proportion donnée              |
+| `rgbToHex`                  | Recompose une couleur hexadécimale                            |
+| `stringToColor`             | Couleur stable dérivée d'un texte                             |
+| `withAlpha`                 | Applique une opacité                                          |
+
+## Points d'attention
+
+- Seul le format **hexadécimal** est accepté : `rgb()`, `hsl()` et les noms CSS (`"red"`)
+  lèvent une erreur. Valider la saisie d'un utilisateur avant de l'utiliser.
+- Les mélanges sont linéaires en sRGB (comme Sass) : le résultat peut paraître plus terne qu'un
+  mélange dans un espace perceptuel (OKLCH).
+- `getReadableTextColor` choisit la **meilleure** des deux candidates, sans garantir le niveau
+  AA : vérifier avec `getContrastRatio` quand l'accessibilité est exigée.
+- `stringToColor` ne connaît que 360 teintes : deux textes différents peuvent obtenir la même
+  couleur. Ne pas s'en servir pour distinguer des éléments de façon certaine.
+- `getLuminance` et `getContrastRatio` ignorent l'opacité : le contraste réel d'une couleur
+  translucide dépend du fond sur lequel elle est posée.
