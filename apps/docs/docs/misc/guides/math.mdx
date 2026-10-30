@@ -1,0 +1,159 @@
+---
+title: Calculs numériques
+sidebar_label: Calculs
+sidebar_position: 10
+---
+
+# Calculs numériques
+
+La catégorie `math` regroupe les calculs courants qui manquent à `Math` : bornage et test
+d'intervalle, arrondi fiable, agrégats (somme, moyenne, médiane), recherche de l'élément
+extrême d'une liste, pourcentage et interpolation. Toutes les fonctions sont pures et ne
+modifient pas les tableaux reçus.
+
+À utiliser pour tout calcul destiné à être affiché ou stocké : montants, statistiques,
+jauges, paliers. Les exemples ci-dessous sont tirés d'une application fictive
+« Bibliothèque ».
+
+## Arrondir un montant sans erreur flottante
+
+`Math.round(value * 100) / 100` se trompe sur certaines valeurs (`1.005 * 100` vaut
+`100.49999999999999`). `round` repart de la représentation décimale du nombre et arrondit les
+demis en s'éloignant de zéro, comme `Intl.NumberFormat`. `roundToStep` cale une valeur sur une
+grille (multiple de 0,05 €, quart d'heure).
+
+```ts title="src/fines/compute-fine.ts"
+import { round, roundToStep } from "@etiennea20/adr-misc";
+
+/** Pénalité journalière de retard, en euros. */
+const DAILY_FINE = 0.15;
+
+export function computeFine(daysLate: number): number {
+  // 7 jours : 1,05 € ; arrondi au multiple de 0,05 € le plus proche pour la caisse.
+  return roundToStep(round(daysLate * DAILY_FINE, 2), 0.05);
+}
+
+export function roundLoanDuration(minutes: number): number {
+  return roundToStep(minutes, 15); // 52 → 45, 53 → 60
+}
+```
+
+## Borner une saisie et tester une tranche
+
+`clamp` ramène une valeur dans un intervalle ; `inRange` teste l'appartenance à un
+intervalle, **bornes incluses**. Les deux lèvent une `RangeError` si `min` est supérieur à
+`max`, ce qui révèle tôt une erreur de configuration.
+
+```ts title="src/members/membership-fee.ts"
+import { clamp, inRange } from "@etiennea20/adr-misc";
+
+export function membershipFee(age: number): number {
+  if (inRange(age, 0, 17)) {
+    return 0;
+  }
+  if (inRange(age, 18, 25)) {
+    return 10;
+  }
+  return 20;
+}
+
+export function requestedPage(page: number, pageCount: number): number {
+  return clamp(Math.trunc(page), 1, Math.max(pageCount, 1));
+}
+```
+
+## Statistiques d'emprunt
+
+`sum` et `average` travaillent sur des nombres, `sumBy` sur une propriété d'objets. `median`
+résiste mieux que la moyenne aux valeurs extrêmes (quelques livres rendus avec des mois de
+retard). Une liste vide donne `0` pour une somme, mais `NaN` pour une moyenne ou une médiane :
+tester `Number.isNaN` avant d'afficher.
+
+```ts title="src/stats/loan-stats.ts"
+import { average, median, round, sumBy } from "@etiennea20/adr-misc";
+
+interface ILoan {
+  bookId: string;
+  durationDays: number;
+  fine: number;
+}
+
+export function loanStats(loans: readonly ILoan[]) {
+  const durations = loans.map((loan) => loan.durationDays);
+  const mean = average(durations);
+  return {
+    totalFines: round(
+      sumBy(loans, (loan) => loan.fine),
+      2,
+    ),
+    averageDuration: Number.isNaN(mean) ? null : round(mean, 1),
+    medianDuration: median(durations),
+  };
+}
+```
+
+## Trouver l'élément extrême d'une liste
+
+`minBy` et `maxBy` renvoient l'**élément** (et non seulement la valeur) : le retard le plus
+long, le livre le moins cher. En cas d'égalité, le premier est retenu ; une liste vide donne
+`undefined`.
+
+```ts title="src/loans/worst-late-loan.ts"
+import { maxBy } from "@etiennea20/adr-misc";
+
+interface ILateLoan {
+  memberName: string;
+  bookTitle: string;
+  daysLate: number;
+}
+
+export function worstLateLoan(loans: readonly ILateLoan[]): ILateLoan | undefined {
+  return maxBy(loans, (loan) => loan.daysLate);
+}
+```
+
+## Jauge de remplissage et interpolation
+
+`percentage` renvoie `0` pour un total nul (jauge vide) au lieu de `NaN` ou `Infinity`.
+`lerp` calcule une valeur intermédiaire ; il extrapole hors de `[0, 1]`, d'où le `clamp`.
+
+```ts title="src/catalog/shelf-gauge.ts"
+import { clamp, lerp, percentage } from "@etiennea20/adr-misc";
+
+export function borrowedRate(borrowed: number, total: number): number {
+  return percentage(borrowed, total, 1); // 1 / 3 → 33.3
+}
+
+/** Largeur de la jauge, en pixels, entre une largeur minimale et maximale. */
+export function gaugeWidth(rate: number): number {
+  return lerp(8, 240, clamp(rate / 100, 0, 1));
+}
+```
+
+## Récapitulatif
+
+| Élément       | Rôle                                                               |
+| ------------- | ------------------------------------------------------------------ |
+| `average`     | Moyenne arithmétique (`NaN` pour une liste vide)                   |
+| `clamp`       | Contraint un nombre dans `[min, max]`                              |
+| `inRange`     | Teste l'appartenance à `[min, max]`, bornes incluses               |
+| `lerp`        | Interpolation linéaire entre deux nombres                          |
+| `maxBy`       | Élément dont la valeur extraite est la plus grande                 |
+| `median`      | Médiane (moyenne des deux valeurs centrales pour une taille paire) |
+| `minBy`       | Élément dont la valeur extraite est la plus petite                 |
+| `percentage`  | Pourcentage d'un total (`0` si le total est nul)                   |
+| `round`       | Arrondi décimal fiable, demis éloignés de zéro                     |
+| `roundToStep` | Arrondi au multiple le plus proche d'un pas                        |
+| `sum`         | Somme d'une liste de nombres                                       |
+| `sumBy`       | Somme d'une valeur extraite de chaque élément                      |
+
+## Points d'attention
+
+- `sum` et `sumBy` suivent l'arithmétique flottante (`0.1 + 0.2` vaut `0.30000000000000004`) :
+  arrondir avec `round` avant d'afficher ou de comparer.
+- `average` et `median` renvoient `NaN` pour une liste vide, volontairement : `0` serait une
+  vraie valeur trompeuse.
+- `round` arrondit les demis en s'éloignant de zéro (`round(-2.5)` vaut `-3`), pas à l'entier
+  pair comme l'arrondi bancaire.
+- Pour **formater** un nombre (séparateurs, devise, `%`), utiliser les fonctions de formatage
+  français : les fonctions `math` ne renvoient que des nombres.
