@@ -1,0 +1,142 @@
+---
+title: Construire et lire des URL
+sidebar_label: URL
+sidebar_position: 17
+---
+
+# Construire et lire des URL
+
+La catégorie `url` assemble des URL d'API et des query strings, et relit les paramètres d'une
+URL reçue. Elle ne dépend ni de `URL` ni de `URLSearchParams` (absents de la lib ES2022 du
+package) : le même code tourne dans le navigateur et dans Node.
+
+Les exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Appeler une API avec des filtres
+
+`buildUrl` assemble une base, un chemin et des paramètres en une seule instruction. Les
+paramètres `null` et `undefined` sont ignorés : on peut passer directement un objet de filtres
+partiellement rempli. Les nombres et booléens sont convertis en texte, les dates en ISO 8601
+(UTC), et tout est encodé avec `encodeURIComponent`.
+
+```ts title="src/books/books-api.ts"
+import { buildUrl, type QueryParams } from "@etiennea20/adr-misc";
+
+const API_BASE_URL = "https://api.bibliotheque.fr/";
+
+export interface IBookFilters {
+  search?: string;
+  genres?: string[];
+  available?: boolean;
+  page?: number;
+}
+
+export function booksUrl(filters: IBookFilters): string {
+  const params: QueryParams = {
+    q: filters.search,
+    genre: filters.genres,
+    disponible: filters.available,
+    page: filters.page,
+  };
+  return buildUrl(API_BASE_URL, "/livres", params);
+}
+
+booksUrl({ search: "Victor Hugo", genres: ["roman", "poésie"], page: 2 });
+// "https://api.bibliotheque.fr/livres?q=Victor%20Hugo&genre=roman&genre=po%C3%A9sie&page=2"
+```
+
+Par défaut, un tableau répète la clé (`genre=roman&genre=poésie`). L'option `arrayFormat` de
+`IBuildQueryStringOptions` choisit un autre format, selon ce qu'attend l'API : `"brackets"`
+(`genre[]=roman`) ou `"comma"` (`genre=roman,poésie`).
+
+## Assembler des chemins
+
+`joinUrl` place exactement un `/` entre chaque segment, sans toucher au `//` du protocole. Les
+segments ne sont pas encodés : passer une valeur saisie par `encodeURIComponent`.
+
+```ts title="src/members/member-api.ts"
+import { joinUrl } from "@etiennea20/adr-misc";
+
+export function memberLoansUrl(apiBaseUrl: string, memberId: string): string {
+  return joinUrl(apiBaseUrl, "adherents", encodeURIComponent(memberId), "emprunts");
+}
+
+memberLoansUrl("https://api.bibliotheque.fr/v1/", "a-42");
+// "https://api.bibliotheque.fr/v1/adherents/a-42/emprunts"
+```
+
+`buildQueryString` produit la query string seule, par exemple pour un lien interne ;
+l'option `addQueryPrefix` ajoute le `?` quand le résultat n'est pas vide.
+
+## Relire les filtres d'un lien partagé
+
+`parseQueryString` fait l'opération inverse : il décode une query string (avec ou sans `?`)
+en objet. Une clé répétée ou suffixée par `[]` donne un tableau. Toutes les valeurs restent du
+texte : les convertir avec les fonctions de la catégorie `parsing`.
+
+`getUrlParts` découpe une URL complète (protocole, hôte, port, chemin, query, fragment) sans
+la valider.
+
+```ts title="src/books/read-shared-link.ts"
+import { getUrlParts, parseQueryString } from "@etiennea20/adr-misc";
+
+export interface ISharedSearch {
+  search: string;
+  genres: string[];
+}
+
+export function readSharedLink(link: string): ISharedSearch {
+  const { query } = getUrlParts(link);
+  const params = parseQueryString(query);
+  const genre = params.genre ?? [];
+  return {
+    search: typeof params.q === "string" ? params.q : "",
+    genres: Array.isArray(genre) ? genre : [genre],
+  };
+}
+
+readSharedLink("https://bibliotheque.fr/catalogue?q=Victor+Hugo&genre=roman#resultats");
+// { search: "Victor Hugo", genres: ["roman"] }
+```
+
+## Distinguer liens internes et externes
+
+`isAbsoluteUrl` indique si un lien commence par un protocole (`https:`, `mailto:`…). Un lien
+relatif est alors préfixé par l'URL de l'application.
+
+```ts title="src/notices/notice-link.ts"
+import { isAbsoluteUrl, joinUrl } from "@etiennea20/adr-misc";
+
+export function noticeHref(appBaseUrl: string, link: string): string {
+  return isAbsoluteUrl(link) ? link : joinUrl(appBaseUrl, link);
+}
+
+noticeHref("https://bibliotheque.fr", "/notices/42"); // "https://bibliotheque.fr/notices/42"
+noticeHref("https://bibliotheque.fr", "https://editeur.fr/livre"); // inchangé
+```
+
+## Récapitulatif
+
+| Élément                    | Rôle                                                              |
+| -------------------------- | ----------------------------------------------------------------- |
+| `buildUrl`                 | Base + chemin + paramètres de query en une URL complète           |
+| `joinUrl`                  | Assemble des segments avec exactement un `/` entre chacun         |
+| `buildQueryString`         | Sérialise un objet de paramètres en query string encodée          |
+| `IBuildQueryStringOptions` | Format des tableaux et préfixe `?`                                |
+| `QueryParams`              | Objet de paramètres : valeur simple ou tableau par clé            |
+| `QueryParamValue`          | Valeur simple : texte, nombre, booléen, date, `null`, `undefined` |
+| `parseQueryString`         | Décode une query string en objet                                  |
+| `ParsedQueryString`        | Résultat de `parseQueryString`                                    |
+| `getUrlParts`              | Découpe une URL en composants                                     |
+| `IUrlParts`                | Composants renvoyés par `getUrlParts`                             |
+| `isAbsoluteUrl`            | Indique si une chaîne commence par un protocole                   |
+
+## Points d'attention
+
+- **Aucune validation** : `getUrlParts` et `buildUrl` acceptent n'importe quelle chaîne. Pour
+  valider un lien saisi par un utilisateur, utiliser `isUrl` de la catégorie `validation`.
+- `buildQueryString` et `buildUrl` lèvent une `RangeError` si un paramètre est une date
+  invalide.
+- `buildUrl` ne gère pas une base qui contient déjà un fragment (`#…`).
+- `isAbsoluteUrl("localhost:3000")` renvoie `true` (protocole `localhost`), comme le ferait un
+  navigateur : écrire `http://localhost:3000`.
