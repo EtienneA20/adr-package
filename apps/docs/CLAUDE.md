@@ -9,6 +9,7 @@ dans une seule interface, avec un playground live pour `adr-react`.
 
 | Section   | Dossier       | Contenu                                                                    |
 | --------- | ------------- | -------------------------------------------------------------------------- |
+| Accueil   | `src/pages/`  | `index.tsx` (page React), composants dans `src/components/home/`           |
 | adr-react | `docs/react/` | Une page `.mdx` par composant / hook, rangée par catégorie, avec démo live |
 | adr-nest  | `docs/nest/`  | Présentation, `guides/` (cas d'usage, application fictive), `api/` généré  |
 | adr-misc  | `docs/misc/`  | Présentation, `guides/` (cas d'usage, application fictive), `api/` généré  |
@@ -35,6 +36,13 @@ dans une seule interface, avec un playground live pour `adr-react`.
 - Libellés de la référence API en français (`lang: "fr"` + `locales` dans
   `docusaurus.config.ts` pour les tags non traduits par typedoc).
 - `onBrokenLinks: "throw"` : un lien cassé fait échouer le build.
+- **Thème** : variables et surcharges globales dans `src/css/custom.css` (préfixe `--adr-` pour
+  les variables propres au site, `--ifm-` pour celles d'Infima) ; styles de composant en
+  module CSS (`*.module.css`). CSS pur, sans bibliothèque d'animation. Toute animation doit
+  rester neutralisée par le bloc `prefers-reduced-motion: reduce` de `custom.css`.
+- Seuls les modules de thème typés par `@docusaurus/module-type-aliases` sont importables
+  (`@theme/Layout`, `@docusaurus/Link`…) : `@theme/CodeBlock` et les autres composants de
+  `theme-classic` ne sont pas des dépendances directes.
 
 ## Pièges connus
 
