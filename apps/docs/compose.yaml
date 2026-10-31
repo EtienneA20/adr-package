@@ -1,0 +1,16 @@
+# Exécution de l'image publiée sur GHCR (construite par .github/workflows/docs-image.yml).
+# Prérequis : `docker login ghcr.io` avec un token classic `read:packages` (image privée).
+#
+#   docker compose -f apps/docs/compose.yaml pull
+#   docker compose -f apps/docs/compose.yaml up -d --wait
+#
+# IMAGE_TAG fixe la version déployée (SHA complet du commit) ; `latest` par défaut.
+name: adr-docs
+
+services:
+  docs:
+    image: ghcr.io/etiennea20/adr-docs:${IMAGE_TAG:-latest}
+    container_name: adr-docs
+    restart: unless-stopped
+    ports:
+      - "${DOCS_PORT:-8080}:8080"

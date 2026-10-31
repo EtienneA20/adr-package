@@ -14,3 +14,5 @@ apps/docs/docs/*/api
 packages/*/skills
 **/*.tsbuildinfo
 **/.env*
+# Fichier d'exécution, sans effet sur l'image : évite d'invalider le cache du build.
+apps/docs/compose.yaml

@@ -51,5 +51,8 @@ dans une seule interface, avec un playground live pour `adr-react`.
 - Étapes : `turbo prune --docker` → `pnpm install --frozen-lockfile` (en cache) → build →
   nginx non-root (`nginx-unprivileged`, port 8080), healthcheck sur `/healthz`.
 - `tsconfig.base.json` est copié à part : `turbo prune` ne copie que les workspaces.
-- L'image est construite et poussée sur GHCR par `.github/workflows/docs-image.yml`. Le
-  déploiement n'est pas encore défini.
+- L'image est construite et poussée sur GHCR par `.github/workflows/docs-image.yml`.
+- `compose.yaml` exécute l'image publiée (`IMAGE_TAG` = SHA du commit, `latest` par défaut ;
+  `DOCS_PORT`, 8080 par défaut). Mise à jour : `docker compose -f apps/docs/compose.yaml pull`
+  puis `up -d --wait` (attend le healthcheck). Le déploiement automatique n'est pas encore
+  défini.

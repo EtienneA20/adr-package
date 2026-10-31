@@ -81,8 +81,9 @@ pnpm build
 - Versionnage indépendant par package. Les packages privés (`config`, `docs`) ne sont jamais
   versionnés ni publiés.
 - `docs-image.yml` construit l'image Docker de la doc et la pousse sur
-  `ghcr.io/etiennea20/adr-docs` (tags : SHA du commit et `latest`, 5 versions conservées). Le
-  déploiement n'est pas encore défini.
+  `ghcr.io/etiennea20/adr-docs` (tags : SHA du commit et `latest`, 5 versions conservées).
+  `apps/docs/compose.yaml` l'exécute (`docker compose -f apps/docs/compose.yaml up -d --wait`).
+  Le déploiement automatique n'est pas encore défini.
 
 ## Utiliser un package dans un autre projet
 
