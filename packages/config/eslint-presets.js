@@ -57,6 +57,22 @@ const docsConfigs = [
     rules: { "import-x/no-default-export": "off" },
   },
   {
+    // Alias webpack de Docusaurus (`@theme/Layout`, `@docusaurus/Link`…) : déclarés en modules
+    // ambiants par @docusaurus/module-type-aliases, donc introuvables pour le résolveur.
+    files: ["src/**"],
+    rules: {
+      "import-x/no-unresolved": [
+        "error",
+        {
+          ignore: [
+            "^@theme(?:-original|-init)?/",
+            "^@docusaurus/(?:[A-Z]|use|isInternalUrl|router|renderRoutes|constants)",
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Les surcharges du thème Docusaurus (swizzling) portent le nom PascalCase du composant.
     files: ["src/theme/**"],
     rules: { "check-file/folder-naming-convention": "off" },

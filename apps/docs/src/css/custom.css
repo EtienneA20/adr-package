@@ -1,13 +1,354 @@
+/*
+ * Thème de la documentation : palette indigo, surfaces arrondies, navbar translucide et
+ * animations courtes. Toutes les animations et transitions sont coupées quand le système
+ * demande moins de mouvement (bloc `prefers-reduced-motion` en fin de fichier).
+ */
+
 :root {
-  --ifm-color-primary: #2e5aac;
-  --ifm-color-primary-dark: #29519b;
-  --ifm-color-primary-darker: #274d92;
-  --ifm-color-primary-darkest: #203f78;
-  --ifm-color-primary-light: #3363bd;
-  --ifm-color-primary-lighter: #3c69c0;
-  --ifm-color-primary-lightest: #557dc8;
+  --ifm-color-primary: #4f46e5;
+  --ifm-color-primary-dark: #4239df;
+  --ifm-color-primary-darker: #3c33dc;
+  --ifm-color-primary-darkest: #2f25c4;
+  --ifm-color-primary-light: #6058e8;
+  --ifm-color-primary-lighter: #6961ea;
+  --ifm-color-primary-lightest: #847eee;
+
+  --ifm-font-family-base:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ifm-font-family-monospace:
+    ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --ifm-background-color: #fff;
+  --ifm-heading-font-weight: 700;
+  --ifm-global-radius: 0.75rem;
+  --ifm-code-border-radius: 0.4rem;
+  --ifm-code-font-size: 90%;
+  --ifm-navbar-height: 4rem;
+  --ifm-navbar-background-color: rgb(255 255 255 / 72%);
+  --ifm-navbar-shadow: none;
+  --ifm-menu-link-padding-vertical: 0.4rem;
+  --ifm-table-stripe-background: transparent;
+  --ifm-footer-background-color: var(--adr-surface-muted);
+  --docusaurus-highlighted-code-line-bg: rgb(79 70 229 / 10%);
+
+  --adr-gradient: linear-gradient(120deg, #4f46e5 0%, #9333ea 50%, #0891b2 100%);
+  /* Fond des éléments à texte blanc (boutons, icônes) : identique dans les deux thèmes. */
+  --adr-gradient-strong: linear-gradient(120deg, #4f46e5 0%, #7c3aed 55%, #0e7490 100%);
+  --adr-border: rgb(15 23 42 / 9%);
+  --adr-surface: #fff;
+  --adr-surface-muted: #f6f7fb;
+  --adr-primary-soft: rgb(79 70 229 / 10%);
+  --adr-shadow-sm: 0 1px 2px rgb(15 23 42 / 6%), 0 1px 3px rgb(15 23 42 / 4%);
+  --adr-shadow-lg: 0 16px 40px -16px rgb(79 70 229 / 35%), 0 4px 12px -4px rgb(15 23 42 / 8%);
+  --adr-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --adr-duration: 280ms;
 }
 
-[data-theme="dark"] {
-  --ifm-color-primary: #7fa3e6;
+/* `html` : Infima déclare ses couleurs sombres sur `html[data-theme="dark"]`. */
+html[data-theme="dark"] {
+  --ifm-color-primary: #818cf8;
+  --ifm-color-primary-dark: #6875f6;
+  --ifm-color-primary-darker: #5b69f5;
+  --ifm-color-primary-darkest: #3346f2;
+  --ifm-color-primary-light: #9aa3fa;
+  --ifm-color-primary-lighter: #a7affb;
+  --ifm-color-primary-lightest: #ced3fd;
+
+  --ifm-background-color: #0b0c14;
+  --ifm-background-surface-color: #11121d;
+  --ifm-navbar-background-color: rgb(11 12 20 / 72%);
+  --docusaurus-highlighted-code-line-bg: rgb(129 140 248 / 16%);
+
+  --adr-gradient: linear-gradient(120deg, #818cf8 0%, #c084fc 50%, #22d3ee 100%);
+  --adr-border: rgb(148 163 184 / 14%);
+  --adr-surface: #12131f;
+  --adr-surface-muted: #161726;
+  --adr-primary-soft: rgb(129 140 248 / 14%);
+  --adr-shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --adr-shadow-lg: 0 16px 40px -16px rgb(129 140 248 / 35%), 0 4px 12px -4px rgb(0 0 0 / 50%);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ifm-color-primary) 25%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+@keyframes adr-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes adr-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Navbar : verre dépoli, soulignement en dégradé qui se déploie au survol. */
+
+.navbar {
+  border-bottom: 1px solid var(--adr-border);
+  backdrop-filter: saturate(180%) blur(14px);
+}
+
+.navbar__title {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.navbar__logo {
+  transition: transform var(--adr-duration) var(--adr-ease-out);
+}
+
+.navbar__brand:hover .navbar__logo {
+  transform: rotate(-8deg) scale(1.06);
+}
+
+.navbar__item.navbar__link {
+  position: relative;
+  font-weight: 500;
+}
+
+.navbar__item.navbar__link::after {
+  position: absolute;
+  right: var(--ifm-navbar-item-padding-horizontal);
+  bottom: 0.2rem;
+  left: var(--ifm-navbar-item-padding-horizontal);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--adr-gradient);
+  content: "";
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--adr-duration) var(--adr-ease-out);
+}
+
+.navbar__item.navbar__link:hover::after,
+.navbar__item.navbar__link--active::after {
+  transform: scaleX(1);
+}
+
+.header-github-link::before {
+  display: block;
+  width: 1.4rem;
+  height: 1.4rem;
+  background-color: currentcolor;
+  content: "";
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  transition: transform var(--adr-duration) var(--adr-ease-out);
+}
+
+.header-github-link:hover::before {
+  transform: scale(1.12);
+}
+
+.navbar__item.header-github-link::after {
+  display: none;
+}
+
+/* Barre latérale : pastille pour la page active, léger décalage au survol. */
+
+.menu {
+  padding: 1rem 0.75rem;
+}
+
+.menu__link {
+  border-radius: 0.5rem;
+  transition:
+    background-color var(--adr-duration) var(--adr-ease-out),
+    color var(--adr-duration) var(--adr-ease-out),
+    transform var(--adr-duration) var(--adr-ease-out);
+}
+
+.menu__link:hover {
+  transform: translateX(3px);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  background: var(--adr-primary-soft);
+  box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+/* Contenu : apparition douce à chaque navigation (le composant est remonté à chaque page). */
+
+.theme-doc-markdown {
+  animation: adr-fade-up 450ms var(--adr-ease-out) both;
+}
+
+.theme-doc-toc-desktop,
+.theme-doc-breadcrumbs {
+  animation: adr-fade-in 600ms var(--adr-ease-out) both;
+}
+
+.markdown h1:first-child {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.markdown h2 {
+  letter-spacing: -0.015em;
+}
+
+.markdown a:not(.hash-link, .card) {
+  background-image: linear-gradient(currentcolor, currentcolor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  text-decoration: none;
+  transition: background-size var(--adr-duration) var(--adr-ease-out);
+}
+
+.markdown a:not(.hash-link, .card):hover {
+  background-size: 100% 1px;
+}
+
+.markdown :not(pre) > code {
+  border: 1px solid var(--adr-border);
+  background: var(--adr-surface-muted);
+  padding: 0.1rem 0.35rem;
+}
+
+/* Infima garde `display: block` (défilement horizontal sur mobile) : la boîte suit le contenu. */
+.markdown table {
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid var(--adr-border);
+  border-collapse: separate;
+  border-radius: var(--ifm-global-radius);
+  border-spacing: 0;
+  box-shadow: var(--adr-shadow-sm);
+}
+
+.markdown table thead tr {
+  background: var(--adr-surface-muted);
+}
+
+.markdown table tr {
+  border: 0;
+  transition: background-color var(--adr-duration) var(--adr-ease-out);
+}
+
+.markdown table th,
+.markdown table td {
+  border: 0;
+  border-bottom: 1px solid var(--adr-border);
+}
+
+.markdown table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown table tbody tr:hover {
+  background: color-mix(in srgb, var(--ifm-color-primary) 5%, transparent);
+}
+
+.theme-code-block {
+  border: 1px solid var(--adr-border);
+  box-shadow: var(--adr-shadow-sm);
+}
+
+.theme-admonition {
+  border-width: 1px 1px 1px 4px;
+  border-style: solid;
+  border-color: var(--adr-border);
+  border-left-color: var(--ifm-alert-border-color);
+  box-shadow: var(--adr-shadow-sm);
+}
+
+/* Cartes (index de catégorie) et pagination : soulèvement et halo au survol. */
+
+.pagination-nav__link,
+.markdown a.card {
+  border: 1px solid var(--adr-border);
+  border-radius: var(--ifm-global-radius);
+  transition:
+    transform var(--adr-duration) var(--adr-ease-out),
+    box-shadow var(--adr-duration) var(--adr-ease-out),
+    border-color var(--adr-duration) var(--adr-ease-out);
+}
+
+.pagination-nav__link:hover,
+.markdown a.card:hover {
+  border-color: color-mix(in srgb, var(--ifm-color-primary) 45%, transparent);
+  box-shadow: var(--adr-shadow-lg);
+  transform: translateY(-3px);
+}
+
+.breadcrumbs__link {
+  transition: background-color var(--adr-duration) var(--adr-ease-out);
+}
+
+.table-of-contents__link {
+  transition: color var(--adr-duration) var(--adr-ease-out);
+}
+
+.table-of-contents__link--active {
+  font-weight: 600;
+}
+
+.footer {
+  border-top: 1px solid var(--adr-border);
+}
+
+.button {
+  transition:
+    transform var(--adr-duration) var(--adr-ease-out),
+    box-shadow var(--adr-duration) var(--adr-ease-out),
+    background-color var(--adr-duration) var(--adr-ease-out);
+}
+
+.button:hover {
+  transform: translateY(-2px);
+}
+
+.button--primary,
+.button--primary:hover {
+  border: 0;
+  background: var(--adr-gradient-strong);
+  box-shadow: var(--adr-shadow-lg);
+  color: #fff;
+}
+
+.button--secondary,
+.button--secondary:hover {
+  border: 1px solid var(--adr-border);
+  background: var(--adr-surface);
+  box-shadow: var(--adr-shadow-sm);
+  color: var(--ifm-font-color-base);
+}
+
+.button--secondary:hover {
+  border-color: color-mix(in srgb, var(--ifm-color-primary) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
