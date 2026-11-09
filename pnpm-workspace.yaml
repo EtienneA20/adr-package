@@ -17,9 +17,9 @@ catalog:
   typescript: ~6.0.3
   eslint: ^9.39.5
   prettier: ^3.9.10
-  vitest: ^5.0.5
-  "@vitest/coverage-v8": ^5.0.5
-  "@types/node": ^26.6.5
+  vitest: ^5.1.0
+  "@vitest/coverage-v8": ^5.1.0
+  "@types/node": ^26.6.6
 
 overrides:
   # eslint-plugin-tsdoc épingle une version de @typescript-eslint/utils qui refuse TypeScript 6 :
