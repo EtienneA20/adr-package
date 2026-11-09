@@ -76,6 +76,15 @@ une quinzaine d'éléments, proposer de la diviser.
 - `clip` est déprécié dans les types CSS : utiliser `clipPath`.
 - `react.configs.flat` de eslint-plugin-react et jsx-a11y imposent ESLint 9 (pas 10).
 
+## Skill de conventions d'UI
+
+`skills-src/adr-ui-design.md` est la source du skill `adr-ui-design` (commande
+`adr-ui-design-skills`) : tokens, thème par section, mode clair / sombre, règles des composants.
+Il guide les applications qui utilisent le package (et `apps/docs`) ; les composants, eux,
+restent sans feuille de style imposée (voir « Pas de dépendance CSS imposée »). Après
+modification :
+`pnpm run install:skills`, puis commiter `.claude/skills/adr-ui-design/`.
+
 ## Élément de référence
 
 `src/ui/visually-hidden/` : modèle à suivre (props documentées, TSDoc complet, tests de rendu,

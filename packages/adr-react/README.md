@@ -46,4 +46,8 @@ export function CloseButton({ onClose }: { onClose: () => void }) {
 ## Documentation
 
 - Inventaire complet des éléments publics : [SKILLS.md](./SKILLS.md).
+- Skills Claude Code : `pnpm exec adr-react-skills` (inventaire du package) et
+  `pnpm exec adr-ui-design-skills` (conventions d'UI, source
+  [skills-src/adr-ui-design.md](./skills-src/adr-ui-design.md)). Ajouter `--global` pour les
+  installer sur toute la machine (`~/.claude/skills`).
 - Démos live et documentation : section « adr-react » de la documentation (`apps/docs` du dépôt).

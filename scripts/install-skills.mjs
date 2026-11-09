@@ -4,8 +4,14 @@
  * de son SKILLS.md (source de vérité) :
  *   .claude/skills/<skill>/SKILL.md      frontmatter + résumé court (rôle, catégories)
  *   .claude/skills/<skill>/reference.md  copie fidèle de l'inventaire complet
- * et, en mode dépôt, recopie scripts/templates/install-skills-bin.mjs dans packages/<pkg>/bin/
- * (script `<pkg>-skills` publié pour les projets consommateurs).
+ * plus un skill par fichier `packages/<pkg>/skills-src/<skill>.md` (skill de conventions, sans
+ * inventaire : son corps devient SKILL.md tel quel).
+ *
+ * En mode dépôt, recopie aussi scripts/templates/install-skills-bin.mjs dans packages/<pkg>/bin/ :
+ * une commande par skill, publiée pour les projets consommateurs. `bin/install-skills.mjs`
+ * (commande `<pkg>-skills`) installe le skill du SKILLS.md ; `bin/install-<skill>.mjs`
+ * (commande `<skill>-skills`) installe un skill de skills-src. Le champ `bin` de package.json
+ * doit déclarer chacune de ces commandes.
  *
  * Options :
  *   --check              n'écrit rien ; code de sortie 1 si les skills sont désynchronisés
@@ -22,64 +28,41 @@ import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { assertBinCommands, findExtraBins, renderBins, staleBins } from "./lib/skill-bins.mjs";
 import { parseSkillsMd } from "./lib/skills-md.mjs";
 import { listPublishedPackages, readText, ROOT_DIR } from "./lib/workspace.mjs";
 
 /** @typedef {import("./lib/workspace.mjs").PublishedPackage} PublishedPackage */
-/** @typedef {{ skill: string; source: string; files: Map<string, string> }} RenderedSkill */
+/** @typedef {import("./lib/skill-bins.mjs").RenderedSkill} RenderedSkill */
+/** @typedef {import("./lib/skill-bins.mjs").RenderedPackage} RenderedPackage */
 /**
  * @typedef {object} InstallPlan
  * @property {string} skillsDir - Dossier des skills de destination.
  * @property {RenderedSkill[]} rendered - Skills attendus.
  * @property {string[]} stale - Skills générés dont le package n'existe plus.
- * @property {Map<string, string>} bins - Script bin attendu de chaque package (mode dépôt).
+ * @property {Map<string, string>} bins - Script bin attendu de chaque commande (mode dépôt).
+ * @property {string[]} extraBins - Scripts présents dans bin/ sans commande associée.
  */
 
 const MARKER = "generated-by: adr-package/install-skills";
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_DESCRIPTION = 1024;
 const MAX_SKILL_LINES = 150;
-const BIN_TEMPLATE = path.join(ROOT_DIR, "scripts", "templates", "install-skills-bin.mjs");
-const BIN_HEADER =
-  "// Généré par `pnpm run install:skills` depuis scripts/templates/install-skills-bin.mjs : ne pas modifier.";
+const MAX_EXTRA_SKILL_LINES = 500;
+const EXTRA_SKILLS_DIR = "skills-src";
 
 /**
- * Contenu attendu du script bin de chaque package (copie du modèle avec un en-tête).
+ * Lit et valide le frontmatter (`skill`, `description`) d'une source de skill.
  *
- * @param {PublishedPackage[]} packages - Packages concernés.
- * @returns {Map<string, string>} Chemin du script → contenu attendu.
- */
-function renderBins(packages) {
-  const [shebang = "", ...rest] = readText(BIN_TEMPLATE).split("\n");
-  const content = [shebang, BIN_HEADER, ...rest].join("\n");
-  return new Map(packages.map((pkg) => [path.join(pkg.dir, "bin", "install-skills.mjs"), content]));
-}
-
-/**
- * Liste les scripts bin absents ou différents du modèle.
- *
- * @param {Map<string, string>} bins - Chemin du script → contenu attendu.
- * @returns {string[]} Les chemins désynchronisés.
- */
-function staleBins(bins) {
-  return [...bins]
-    .filter(([file, content]) => !existsSync(file) || readText(file) !== content)
-    .map(([file]) => file);
-}
-
-/**
- * Lit et valide le SKILLS.md d'un package.
- *
- * @param {PublishedPackage} pkg - Package source.
- * @param {string} source - Chemin de SKILLS.md relatif à la racine (pour les messages).
+ * @param {string} file - Chemin absolu du fichier source.
+ * @param {string} source - Chemin relatif à la racine (pour les messages).
  * @returns {import("./lib/skills-md.mjs").SkillsDocument & { skill: string; description: string }}
  *   Le document analysé, avec le nom et la description du skill.
- * @throws {Error} Si SKILLS.md est absent ou si son frontmatter est invalide.
+ * @throws {Error} Si le fichier est absent ou si son frontmatter est invalide.
  */
-function readSkillsSource(pkg, source) {
-  const skillsPath = path.join(pkg.dir, "SKILLS.md");
-  if (!existsSync(skillsPath)) throw new Error(`${source} est absent`);
-  const document = parseSkillsMd(readText(skillsPath));
+function readSkillsSource(file, source) {
+  if (!existsSync(file)) throw new Error(`${source} est absent`);
+  const document = parseSkillsMd(readText(file));
   const skill = document.frontmatter.skill ?? "";
   const description = document.frontmatter.description ?? "";
   if (!SKILL_NAME.test(skill) || skill.length > 64) {
@@ -100,7 +83,10 @@ function readSkillsSource(pkg, source) {
  */
 function renderSkill(pkg) {
   const source = `packages/${pkg.dirName}/SKILLS.md`;
-  const { skill, description, body, sections } = readSkillsSource(pkg, source);
+  const { skill, description, body, sections } = readSkillsSource(
+    path.join(pkg.dir, "SKILLS.md"),
+    source,
+  );
   const header = `<!-- Généré par \`pnpm run install:skills\` à partir de ${source}, ne pas modifier à la main. -->`;
   const toc = (sections.get("Table des matières") ?? "").replace(/\]\(#/g, "](reference.md#");
   const skillMd = [
@@ -144,6 +130,84 @@ function renderSkill(pkg) {
     ["reference.md", `${header}\n\n${body.trim()}\n`],
   ]);
   return { skill, source, files };
+}
+
+/**
+ * Construit un skill additionnel depuis `skills-src/<skill>.md` : frontmatter de skill, puis le
+ * corps du fichier tel quel (pas d'inventaire, donc pas de reference.md).
+ *
+ * @param {PublishedPackage} pkg - Package source.
+ * @param {string} fileName - Nom du fichier dans skills-src/.
+ * @returns {RenderedSkill} Le skill rendu.
+ * @throws {Error} Si le frontmatter est invalide, si `skill` diffère du nom du fichier ou si
+ *   SKILL.md serait trop long.
+ */
+function renderExtraSkill(pkg, fileName) {
+  const source = `packages/${pkg.dirName}/${EXTRA_SKILLS_DIR}/${fileName}`;
+  const { skill, description, body } = readSkillsSource(
+    path.join(pkg.dir, EXTRA_SKILLS_DIR, fileName),
+    source,
+  );
+  if (`${skill}.md` !== fileName) {
+    throw new Error(`${source} : « skill » doit être identique au nom du fichier (${skill}.md)`);
+  }
+  const header = `<!-- Généré par \`pnpm run install:skills\` à partir de ${source}, ne pas modifier à la main. -->`;
+  const skillMd = [
+    "---",
+    `name: ${skill}`,
+    `description: ${JSON.stringify(description)}`,
+    "metadata:",
+    `  ${MARKER}`,
+    `  source: ${source}`,
+    "---",
+    "",
+    header,
+    "",
+    body.trim(),
+    "",
+  ].join("\n");
+  if (skillMd.split("\n").length > MAX_EXTRA_SKILL_LINES) {
+    throw new Error(`${source} : SKILL.md dépasserait ${MAX_EXTRA_SKILL_LINES} lignes`);
+  }
+  return { skill, source, files: new Map([["SKILL.md", skillMd]]) };
+}
+
+/**
+ * Construit tous les skills d'un package : celui de SKILLS.md, puis ceux de skills-src/.
+ *
+ * @param {PublishedPackage} pkg - Package source.
+ * @returns {RenderedPackage} Les skills du package.
+ */
+function renderPackage(pkg) {
+  const dir = path.join(pkg.dir, EXTRA_SKILLS_DIR);
+  const extraFiles = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((name) => name.endsWith(".md"))
+        .sort()
+    : [];
+  return {
+    pkg,
+    main: renderSkill(pkg),
+    extras: extraFiles.map((fileName) => renderExtraSkill(pkg, fileName)),
+  };
+}
+
+/**
+ * Refuse deux skills de même nom (ils s'écraseraient dans le dossier de destination).
+ *
+ * @param {RenderedSkill[]} rendered - Skills attendus.
+ * @throws {Error} Si un nom de skill est utilisé deux fois.
+ */
+function assertUniqueSkills(rendered) {
+  const seen = new Map();
+  for (const { skill, source } of rendered) {
+    if (seen.has(skill)) {
+      throw new Error(
+        `skill « ${skill} » défini deux fois (${String(seen.get(skill))}, ${source})`,
+      );
+    }
+    seen.set(skill, source);
+  }
 }
 
 /**
@@ -269,12 +333,17 @@ function main() {
   );
   if (packages.length === 0)
     throw new Error(`aucun package publié ne correspond à « ${packageFilter ?? ""} »`);
-  const rendered = packages.map(renderSkill);
+  const renderedPackages = packages.map(renderPackage);
+  const rendered = renderedPackages.flatMap(({ main, extras }) => [main, ...extras]);
+  assertUniqueSkills(rendered);
   assertOwnership(skillsDir, rendered);
+  if (isRepo) assertBinCommands(renderedPackages);
   // Les orphelins ne sont recherchés que dans le dépôt, avec la liste complète des packages.
   const stale = isRepo && !packageFilter ? findStaleSkills(skillsDir, rendered) : [];
+  const bins = isRepo ? renderBins(renderedPackages) : new Map();
+  const extraBins = isRepo ? findExtraBins(renderedPackages, bins) : [];
   /** @type {InstallPlan} */
-  const plan = { skillsDir, rendered, stale, bins: isRepo ? renderBins(packages) : new Map() };
+  const plan = { skillsDir, rendered, stale, bins, extraBins };
   return check ? reportCheck(plan) : install(plan);
 }
 
@@ -284,11 +353,12 @@ function main() {
  * @param {InstallPlan} plan - Skills et scripts attendus.
  * @returns {number} 0 si synchronisé, 1 sinon.
  */
-function reportCheck({ skillsDir, rendered, stale, bins }) {
+function reportCheck({ skillsDir, rendered, stale, bins, extraBins }) {
   const differences = [
     ...rendered.flatMap((item) => diffSkill(path.join(skillsDir, item.skill), item)),
     ...stale.map((name) => `${path.join(skillsDir, name)} : skill généré orphelin`),
     ...staleBins(bins).map((file) => `${file} : différent du modèle`),
+    ...extraBins.map((file) => `${file} : script bin sans skill associé`),
   ];
   if (differences.length === 0) {
     console.log(`✔ skills synchronisés (${rendered.map((item) => item.skill).join(", ")})`);
@@ -306,11 +376,15 @@ function reportCheck({ skillsDir, rendered, stale, bins }) {
  * @param {InstallPlan} plan - Skills et scripts à écrire.
  * @returns {number} Toujours 0.
  */
-function install({ skillsDir, rendered, stale, bins }) {
+function install({ skillsDir, rendered, stale, bins, extraBins }) {
   for (const file of staleBins(bins)) {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, bins.get(file) ?? "");
     console.log(`✔ mis à jour ${file}`);
+  }
+  for (const file of extraBins) {
+    rmSync(file, { force: true });
+    console.log(`✔ supprimé   ${file} (aucun skill associé)`);
   }
   for (const item of rendered) {
     const changed = writeSkill(path.join(skillsDir, item.skill), item);

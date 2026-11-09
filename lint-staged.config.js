@@ -10,5 +10,8 @@ export default {
     "prettier --write --ignore-unknown",
   ],
   "*.{json,md,mdx,yml,yaml,css,html}": "prettier --write --ignore-unknown",
-  "packages/*/SKILLS.md": () => ["node scripts/install-skills.mjs", "git add .claude/skills"],
+  "packages/*/{SKILLS.md,skills-src/*.md}": () => [
+    "node scripts/install-skills.mjs",
+    "git add .claude/skills",
+  ],
 };
