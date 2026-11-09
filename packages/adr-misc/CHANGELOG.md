@@ -1,5 +1,11 @@
 # @etiennea20/adr-misc
 
+## 0.2.1
+
+### Patch Changes
+
+- [#10](https://github.com/EtienneA20/adr-package/pull/10) [`86f85a8`](https://github.com/EtienneA20/adr-package/commit/86f85a88a335b3ce5235cbb84fc2063a1b621441) Thanks [@EtienneA20](https://github.com/EtienneA20)! - La commande d'installation des skills (`adr-nest-skills`, `adr-misc-skills`) n'installe que le skill du package et vérifie sa présence avant de copier.
+
 ## 0.2.0
 
 ### Minor Changes
