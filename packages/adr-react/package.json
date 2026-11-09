@@ -42,7 +42,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "adr-react-skills": "./bin/install-skills.mjs"
+    "adr-react-skills": "./bin/install-skills.mjs",
+    "adr-ui-design-skills": "./bin/install-adr-ui-design.mjs"
   },
   "files": [
     "dist",

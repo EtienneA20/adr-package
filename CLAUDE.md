@@ -200,13 +200,26 @@ Règles :
 
 Skills embarqués dans les packages publiés (pour les projets consommateurs) :
 
-- Le build de chaque package génère `skills/<package>/` (`pnpm run build:skills`, ignoré par
+- Le build de chaque package génère `skills/<skill>/` (`pnpm run build:skills`, ignoré par
   Git) ; `skills` et `bin` font partie du champ `files`.
-- `bin/install-skills.mjs` (commandes `adr-react-skills`, `adr-nest-skills`,
-  `adr-misc-skills`) est une **copie générée** de `scripts/templates/install-skills-bin.mjs` :
-  modifier le modèle, puis `pnpm run install:skills` (vérifié par `--check`).
-- Aucun `postinstall` : le consommateur lance `pnpm exec adr-react-skills` (`--global` ou
-  `--target <projet>` en option).
+- **Une commande par skill**, nommée `<skill>-skills`. `bin/install-skills.mjs` (commandes
+  `adr-react-skills`, `adr-nest-skills`, `adr-misc-skills`) installe le skill du `SKILLS.md` ;
+  `bin/install-<skill>.mjs` installe un skill additionnel. Ce sont des **copies générées** de
+  `scripts/templates/install-skills-bin.mjs` : modifier le modèle, puis
+  `pnpm run install:skills` (vérifié par `--check`).
+- Aucun `postinstall` : le consommateur lance `pnpm exec adr-react-skills` (`--global` pour
+  toute la machine, ou `--target <projet>`).
+
+Skills additionnels (conventions, sans inventaire d'exports) :
+
+- Un fichier `packages/<package>/skills-src/<skill>.md` = un skill de plus pour ce package.
+  Frontmatter identique à `SKILLS.md` (`skill`, égal au nom du fichier, et `description`) ; le
+  corps devient le `SKILL.md` tel quel (500 lignes max, pas de `reference.md`).
+- Le champ `bin` du `package.json` doit déclarer `"<skill>-skills": "./bin/install-<skill>.mjs"` :
+  `install:skills` échoue sinon.
+- Existant : `adr-ui-design` dans adr-react (conventions d'UI, commande `adr-ui-design-skills`).
+  Toute interface (doc comprise) suit ce skill ; le modifier en même temps que le thème de
+  `apps/docs`.
 
 Format (strict, analysé par les scripts de `scripts/`) :
 

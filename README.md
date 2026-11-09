@@ -118,11 +118,14 @@ En CI GitHub Actions, utiliser `NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}` avec la 
 ### Installer les skills Claude Code d'un package
 
 Chaque package publié embarque son skill Claude Code (inventaire de ses éléments publics).
-Aucune installation automatique : depuis la racine du projet consommateur,
+adr-react embarque en plus `adr-ui-design` (conventions d'UI : palette, mode clair / sombre,
+composants, responsive), avec sa propre commande. Aucune installation automatique : depuis la
+racine du projet consommateur,
 
 ```powershell
-pnpm exec adr-react-skills            # → .claude/skills/adr-react/
-pnpm exec adr-nest-skills --global    # → ~/.claude/skills/adr-nest/
+pnpm exec adr-react-skills                # → .claude/skills/adr-react/
+pnpm exec adr-nest-skills --global        # → ~/.claude/skills/adr-nest/
+pnpm exec adr-ui-design-skills --global   # → ~/.claude/skills/adr-ui-design/ (toute la machine)
 ```
 
 ou, dans le `package.json` du projet consommateur :

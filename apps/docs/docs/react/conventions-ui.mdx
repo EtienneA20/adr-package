@@ -1,0 +1,47 @@
+---
+title: Conventions d'UI
+sidebar_position: 10
+---
+
+# Conventions d'UI
+
+adr-react embarque un second skill Claude Code, **`adr-ui-design`**. Il décrit les conventions
+visuelles des interfaces @etiennea20, que cette documentation applique. Il sert à concevoir une
+nouvelle interface ou à en relire une avec les mêmes règles.
+
+```sh
+pnpm exec adr-ui-design-skills            # → .claude/skills/adr-ui-design/ du projet
+pnpm exec adr-ui-design-skills --global   # → ~/.claude/skills/ (toute la machine)
+```
+
+## Principes
+
+- **Épuré** : aplats de couleur et bordures fines. Pas de dégradé, de halo, d'ombre décorative,
+  de carte qui se soulève ni d'animation d'apparition.
+- **Neutres chauds** partout : blanc beige en clair, brun très sombre en sombre.
+- **Un accent par section** : corail pour l'accueil, bleu pour adr-react, rouge pour adr-nest,
+  vert pour adr-misc. Les composants n'utilisent que l'accent courant (`--adr-accent*`).
+- **Deux modes** choisis par l'utilisateur, clair par défaut. Le thème du système n'est pas
+  suivi.
+- **Mobile et accessible** : aucun défilement horizontal à 360 px, cibles de 44 px, contraste du
+  texte d'au moins 4,5:1, liens soulignés, focus visible.
+
+## Palettes
+
+| Palette | Section   | Aplat (clair) | Texte (clair) | Aplat / texte (sombre) |
+| ------- | --------- | ------------- | ------------- | ---------------------- |
+| Corail  | Accueil   | `#e8735a`     | `#b5452e`     | `#f08b70`              |
+| Bleu    | adr-react | `#2160c4`     | `#2160c4`     | `#7aaef5`              |
+| Rouge   | adr-nest  | `#b3242c`     | `#b3242c`     | `#f26d73`              |
+| Vert    | adr-misc  | `#2b7548`     | `#2b7548`     | `#6cc48e`              |
+
+Chaque palette a aussi une teinte de survol, un fond teinté et une couleur de texte posée sur
+l'aplat. Le skill donne toutes les valeurs, les neutres, les règles des composants (navbar,
+barre latérale, boutons, cartes, badges, code, tableaux) et une checklist de relecture.
+
+## Quand ne pas l'utiliser
+
+- Pour une interface qui a déjà sa propre charte (client, produit tiers) : la charte existante
+  prime.
+- Pour un composant de adr-react lui-même : les composants n'imposent aucune feuille de style
+  (voir le `CLAUDE.md` du package). Le skill guide les styles de l'application qui les utilise.
