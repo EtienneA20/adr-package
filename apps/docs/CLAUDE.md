@@ -36,10 +36,20 @@ dans une seule interface, avec un playground live pour `adr-react`.
 - Libellés de la référence API en français (`lang: "fr"` + `locales` dans
   `docusaurus.config.ts` pour les tags non traduits par typedoc).
 - `onBrokenLinks: "throw"` : un lien cassé fait échouer le build.
-- **Thème** : variables et surcharges globales dans `src/css/custom.css` (préfixe `--adr-` pour
-  les variables propres au site, `--ifm-` pour celles d'Infima) ; styles de composant en
-  module CSS (`*.module.css`). CSS pur, sans bibliothèque d'animation. Toute animation doit
-  rester neutralisée par le bloc `prefers-reduced-motion: reduce` de `custom.css`.
+- **Thème** : suit le skill `adr-ui-design` (`packages/adr-react/skills-src/adr-ui-design.md`) ;
+  toute évolution de la DA modifie les deux ensemble. Tokens et surcharges globales dans
+  `src/css/custom.css` (préfixe `--adr-` pour les tokens, `--ifm-` pour Infima, dérivé des
+  tokens) ; styles de composant en module CSS (`*.module.css`), sans couleur en dur.
+  - Palette par section : `src/theme/Root` pose `<html data-adr-section="home|react|nest|misc">`
+    via `<Head>` (présent dans le HTML généré, pas de flash) ; `custom.css` remappe
+    `--adr-accent*` (corail, bleu, rouge, vert).
+  - Mode clair / sombre à deux états, clair par défaut, système ignoré
+    (`respectPrefersColorScheme: false`). Fond des blocs de code : `CODE_BACKGROUND` dans
+    `docusaurus.config.ts` (Prism l'applique en style inline).
+  - Épuré : ni dégradé, ni ombre décorative, ni animation d'apparition ; transitions de couleur
+    seulement, neutralisées par le bloc `prefers-reduced-motion: reduce`.
+  - Classes hachées du thème (`colorModeToggle_xxxx`) ciblées par `[class*=…]` : à revérifier
+    après une montée de version de Docusaurus (bascule visible sur mobile).
 - Seuls les modules de thème typés par `@docusaurus/module-type-aliases` sont importables
   (`@theme/Layout`, `@docusaurus/Link`…) : `@theme/CodeBlock` et les autres composants de
   `theme-classic` ne sont pas des dépendances directes.

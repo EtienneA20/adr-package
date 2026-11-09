@@ -1,8 +1,19 @@
 import type * as Preset from "@docusaurus/preset-classic";
 import type { Config } from "@docusaurus/types";
-import { themes as prismThemes } from "prism-react-renderer";
+import { themes as prismThemes, type PrismTheme } from "prism-react-renderer";
 
 const REPOSITORY_URL = "https://github.com/EtienneA20/adr-package";
+
+/** Fond des blocs de code : neutre « atténué » de la palette (voir src/css/custom.css). */
+const CODE_BACKGROUND = { light: "#F2ECE3", dark: "#221E1B" } as const;
+
+/**
+ * Remplace le fond d'un thème Prism : Docusaurus l'applique en style inline sur chaque bloc,
+ * il ne peut donc pas être surchargé depuis custom.css.
+ */
+function withBackground(theme: PrismTheme, backgroundColor: string): PrismTheme {
+  return { ...theme, plain: { ...theme.plain, backgroundColor } };
+}
 
 /**
  * Référence API générée depuis le TSDoc d'un package (docusaurus-plugin-typedoc), en français.
@@ -60,15 +71,35 @@ const config: Config = {
   plugins: [typedocPlugin("nest"), typedocPlugin("misc")],
 
   themeConfig: {
-    colorMode: { respectPrefersColorScheme: true },
+    // Bascule à deux états (clair / sombre) : le thème du système n'est pas suivi.
+    colorMode: { defaultMode: "light", disableSwitch: false, respectPrefersColorScheme: false },
     docs: { sidebar: { hideable: true, autoCollapseCategories: true } },
     navbar: {
       title: "adr-package",
       logo: { alt: "", src: "img/logo.svg" },
+      // `navbar-package--<section>` : pastille de la couleur du package (src/css/custom.css).
       items: [
-        { type: "docSidebar", sidebarId: "react", position: "left", label: "adr-react" },
-        { type: "docSidebar", sidebarId: "nest", position: "left", label: "adr-nest" },
-        { type: "docSidebar", sidebarId: "misc", position: "left", label: "adr-misc" },
+        {
+          type: "docSidebar",
+          sidebarId: "react",
+          position: "left",
+          label: "adr-react",
+          className: "navbar-package navbar-package--react",
+        },
+        {
+          type: "docSidebar",
+          sidebarId: "nest",
+          position: "left",
+          label: "adr-nest",
+          className: "navbar-package navbar-package--nest",
+        },
+        {
+          type: "docSidebar",
+          sidebarId: "misc",
+          position: "left",
+          label: "adr-misc",
+          className: "navbar-package navbar-package--misc",
+        },
         {
           href: REPOSITORY_URL,
           position: "right",
@@ -105,7 +136,10 @@ const config: Config = {
       copyright: "Packages @etiennea20 · documentation générée avec Docusaurus",
     },
     liveCodeBlock: { playgroundPosition: "top" },
-    prism: { theme: prismThemes.oneLight, darkTheme: prismThemes.oneDark },
+    prism: {
+      theme: withBackground(prismThemes.oneLight, CODE_BACKGROUND.light),
+      darkTheme: withBackground(prismThemes.oneDark, CODE_BACKGROUND.dark),
+    },
   } satisfies Preset.ThemeConfig,
 };
 

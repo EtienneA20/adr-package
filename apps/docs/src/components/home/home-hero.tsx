@@ -50,32 +50,22 @@ function InstallCommand(): ReactNode {
 export function HomeHero(): ReactNode {
   return (
     <header className={styles.hero}>
-      <div className={styles.backdrop} aria-hidden="true">
-        <span className={styles.blob} />
-        <span className={styles.blob} />
-        <span className={styles.blob} />
-      </div>
       <div className="container">
-        <div className={styles.heroInner}>
-          <p className={styles.eyebrow}>Monorepo @etiennea20</p>
-          <h1 className={styles.title}>
-            Des briques <span className={styles.gradientText}>TypeScript</span> prêtes à
-            l&apos;emploi
-          </h1>
-          <p className={styles.tagline}>
-            Composants React, utilitaires NestJS et fonctions partagées front et back : typés,
-            testés et documentés en français.
-          </p>
-          <div className={styles.actions}>
-            <Link className="button button--primary button--lg" to="/react">
-              Découvrir les composants
-            </Link>
-            <Link className="button button--secondary button--lg" to="/misc">
-              Parcourir les utilitaires
-            </Link>
-          </div>
-          <InstallCommand />
+        <p className={styles.eyebrow}>Monorepo @etiennea20</p>
+        <h1 className={styles.title}>Des briques TypeScript prêtes à l&apos;emploi.</h1>
+        <p className={styles.tagline}>
+          Composants React, utilitaires NestJS et fonctions partagées front et back : typés, testés
+          et documentés en français.
+        </p>
+        <div className={styles.actions}>
+          <Link className="button button--primary button--lg" to="/react">
+            Découvrir les composants
+          </Link>
+          <Link className="button button--secondary button--lg" to="/misc">
+            Parcourir les utilitaires
+          </Link>
         </div>
+        <InstallCommand />
       </div>
     </header>
   );

@@ -1,121 +1,218 @@
 /*
- * Thème de la documentation : palette indigo, surfaces arrondies, navbar translucide et
- * animations courtes. Toutes les animations et transitions sont coupées quand le système
- * demande moins de mouvement (bloc `prefers-reduced-motion` en fin de fichier).
+ * Thème de la documentation (conventions décrites par le skill `adr-ui-design` de adr-react).
+ *
+ * - Neutres chauds communs à tout le site (blanc beige en clair, brun très sombre en sombre).
+ * - Une palette par section, choisie par `html[data-adr-section]` (posé par src/theme/Root) :
+ *   corail pour l'accueil, bleu pour adr-react, rouge pour adr-nest, vert pour adr-misc.
+ * - Interface épurée : aplats de couleur, bordures fines, aucun dégradé ni ombre portée
+ *   décorative, aucune animation d'apparition.
  */
 
+/* 1. Tokens : mode clair. */
+
 :root {
-  --ifm-color-primary: #4f46e5;
-  --ifm-color-primary-dark: #4239df;
-  --ifm-color-primary-darker: #3c33dc;
-  --ifm-color-primary-darkest: #2f25c4;
-  --ifm-color-primary-light: #6058e8;
-  --ifm-color-primary-lighter: #6961ea;
-  --ifm-color-primary-lightest: #847eee;
+  --adr-bg: #faf6f0;
+  --adr-surface: #fffdfa;
+  --adr-muted: #f2ece3;
+  --adr-border: #e5ddd1;
+  --adr-text: #2a241f;
+  --adr-text-2: #6b6158;
+  --adr-code-bg: #f2ece3;
+
+  /* Chaque palette : aplat, texte (≥ 4,5:1 sur le fond), survol, fond teinté, texte sur l'aplat. */
+  --adr-coral: #e8735a;
+  --adr-coral-text: #b5452e;
+  --adr-coral-hover: #ec8670;
+  --adr-coral-soft: #fbe6de;
+  --adr-coral-contrast: #2a241f;
+
+  --adr-react: #2160c4;
+  --adr-react-text: #2160c4;
+  --adr-react-hover: #1c53ab;
+  --adr-react-soft: #e3ecfa;
+  --adr-react-contrast: #fff;
+
+  --adr-nest: #b3242c;
+  --adr-nest-text: #b3242c;
+  --adr-nest-hover: #9c1f26;
+  --adr-nest-soft: #f9e2e1;
+  --adr-nest-contrast: #fff;
+
+  --adr-misc: #2b7548;
+  --adr-misc-text: #2b7548;
+  --adr-misc-hover: #24653e;
+  --adr-misc-soft: #e2f1e6;
+  --adr-misc-contrast: #fff;
+
+  --adr-radius: 0.625rem;
+  --adr-radius-sm: 0.4rem;
+  --adr-duration: 150ms;
+}
+
+/* 2. Tokens : mode sombre (`html` : Infima déclare ses couleurs sombres sur `html[data-theme]`). */
+
+html[data-theme="dark"] {
+  --adr-bg: #171412;
+  --adr-surface: #1f1b18;
+  --adr-muted: #28231f;
+  --adr-border: #38312b;
+  --adr-text: #eee7de;
+  --adr-text-2: #a99f94;
+  --adr-code-bg: #221e1b;
+
+  --adr-coral: #f08b70;
+  --adr-coral-text: #f08b70;
+  --adr-coral-hover: #f39c85;
+  --adr-coral-soft: #3a2520;
+  --adr-coral-contrast: #171412;
+
+  --adr-react: #7aaef5;
+  --adr-react-text: #7aaef5;
+  --adr-react-hover: #92bdf7;
+  --adr-react-soft: #1d2a3f;
+  --adr-react-contrast: #171412;
+
+  --adr-nest: #f26d73;
+  --adr-nest-text: #f26d73;
+  --adr-nest-hover: #f5868b;
+  --adr-nest-soft: #3a1e21;
+  --adr-nest-contrast: #171412;
+
+  --adr-misc: #6cc48e;
+  --adr-misc-text: #6cc48e;
+  --adr-misc-hover: #85cfa1;
+  --adr-misc-soft: #1d3326;
+  --adr-misc-contrast: #171412;
+}
+
+/* 3. Accent courant : corail par défaut, palette du package dans sa section. */
+
+html {
+  --adr-accent: var(--adr-coral);
+  --adr-accent-text: var(--adr-coral-text);
+  --adr-accent-hover: var(--adr-coral-hover);
+  --adr-accent-soft: var(--adr-coral-soft);
+  --adr-accent-contrast: var(--adr-coral-contrast);
+}
+
+html[data-adr-section="react"] {
+  --adr-accent: var(--adr-react);
+  --adr-accent-text: var(--adr-react-text);
+  --adr-accent-hover: var(--adr-react-hover);
+  --adr-accent-soft: var(--adr-react-soft);
+  --adr-accent-contrast: var(--adr-react-contrast);
+}
+
+html[data-adr-section="nest"] {
+  --adr-accent: var(--adr-nest);
+  --adr-accent-text: var(--adr-nest-text);
+  --adr-accent-hover: var(--adr-nest-hover);
+  --adr-accent-soft: var(--adr-nest-soft);
+  --adr-accent-contrast: var(--adr-nest-contrast);
+}
+
+html[data-adr-section="misc"] {
+  --adr-accent: var(--adr-misc);
+  --adr-accent-text: var(--adr-misc-text);
+  --adr-accent-hover: var(--adr-misc-hover);
+  --adr-accent-soft: var(--adr-misc-soft);
+  --adr-accent-contrast: var(--adr-misc-contrast);
+}
+
+/* 4. Variables Infima dérivées des tokens (même spécificité que celles d'Infima en sombre). */
+
+:root,
+html[data-theme="dark"] {
+  --ifm-color-primary: var(--adr-accent-text);
+  --ifm-color-primary-dark: var(--adr-accent-text);
+  --ifm-color-primary-darker: var(--adr-accent-text);
+  --ifm-color-primary-darkest: var(--adr-accent-text);
+  --ifm-color-primary-light: var(--adr-accent-text);
+  --ifm-color-primary-lighter: var(--adr-accent-text);
+  --ifm-color-primary-lightest: var(--adr-accent-text);
+
+  --ifm-background-color: var(--adr-bg);
+  --ifm-background-surface-color: var(--adr-surface);
+  --ifm-color-content: var(--adr-text);
+  --ifm-color-content-secondary: var(--adr-text-2);
+  --ifm-font-color-base: var(--adr-text);
+  --ifm-heading-color: var(--adr-text);
+  --ifm-link-color: var(--adr-accent-text);
+  --ifm-link-hover-color: var(--adr-accent-text);
+  --ifm-hr-background-color: var(--adr-border);
+  --ifm-toc-border-color: var(--adr-border);
+  --ifm-table-border-color: var(--adr-border);
+  --ifm-table-stripe-background: transparent;
+
+  /* Gris d'Infima (froids) remplacés par les neutres chauds. */
+  --ifm-color-emphasis-0: var(--adr-bg);
+  --ifm-color-emphasis-100: var(--adr-muted);
+  --ifm-color-emphasis-200: var(--adr-border);
+  --ifm-color-emphasis-300: var(--adr-border);
+  --ifm-color-emphasis-400: color-mix(in srgb, var(--adr-text-2) 60%, var(--adr-bg));
+  --ifm-color-emphasis-500: color-mix(in srgb, var(--adr-text-2) 80%, var(--adr-bg));
+  --ifm-color-emphasis-600: var(--adr-text-2);
+  --ifm-color-emphasis-700: var(--adr-text-2);
+  --ifm-color-emphasis-800: var(--adr-text);
+  --ifm-color-emphasis-900: var(--adr-text);
+  --ifm-color-emphasis-1000: var(--adr-text);
 
   --ifm-font-family-base:
     system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --ifm-font-family-monospace:
     ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-  --ifm-background-color: #fff;
   --ifm-heading-font-weight: 700;
-  --ifm-global-radius: 0.75rem;
-  --ifm-code-border-radius: 0.4rem;
+  --ifm-global-radius: var(--adr-radius);
+  --ifm-global-shadow-lw: none;
+  --ifm-global-shadow-md: none;
+  --ifm-global-shadow-tl: none;
+  --ifm-code-background: var(--adr-code-bg);
+  --ifm-code-border-radius: var(--adr-radius-sm);
   --ifm-code-font-size: 90%;
-  --ifm-navbar-height: 4rem;
-  --ifm-navbar-background-color: rgb(255 255 255 / 72%);
+  --ifm-navbar-height: 3.75rem;
+  --ifm-navbar-background-color: var(--adr-surface);
   --ifm-navbar-shadow: none;
+  --ifm-navbar-link-color: var(--adr-text-2);
+  --ifm-navbar-link-hover-color: var(--adr-text);
+  --ifm-navbar-link-active-color: var(--adr-accent-text);
+  --ifm-menu-color: var(--adr-text-2);
+  --ifm-menu-color-active: var(--adr-accent-text);
+  --ifm-menu-color-background-active: var(--adr-accent-soft);
+  --ifm-menu-color-background-hover: var(--adr-muted);
   --ifm-menu-link-padding-vertical: 0.4rem;
-  --ifm-table-stripe-background: transparent;
-  --ifm-footer-background-color: var(--adr-surface-muted);
-  --docusaurus-highlighted-code-line-bg: rgb(79 70 229 / 10%);
-
-  --adr-gradient: linear-gradient(120deg, #4f46e5 0%, #9333ea 50%, #0891b2 100%);
-  /* Fond des éléments à texte blanc (boutons, icônes) : identique dans les deux thèmes. */
-  --adr-gradient-strong: linear-gradient(120deg, #4f46e5 0%, #7c3aed 55%, #0e7490 100%);
-  --adr-border: rgb(15 23 42 / 9%);
-  --adr-surface: #fff;
-  --adr-surface-muted: #f6f7fb;
-  --adr-primary-soft: rgb(79 70 229 / 10%);
-  --adr-shadow-sm: 0 1px 2px rgb(15 23 42 / 6%), 0 1px 3px rgb(15 23 42 / 4%);
-  --adr-shadow-lg: 0 16px 40px -16px rgb(79 70 229 / 35%), 0 4px 12px -4px rgb(15 23 42 / 8%);
-  --adr-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --adr-duration: 280ms;
+  --ifm-breadcrumb-item-background-active: var(--adr-accent-soft);
+  --ifm-footer-background-color: var(--adr-muted);
+  --ifm-footer-color: var(--adr-text-2);
+  --ifm-footer-link-color: var(--adr-text-2);
+  --ifm-footer-link-hover-color: var(--adr-text);
+  --ifm-footer-title-color: var(--adr-text);
+  --docusaurus-highlighted-code-line-bg: var(--adr-accent-soft);
 }
 
-/* `html` : Infima déclare ses couleurs sombres sur `html[data-theme="dark"]`. */
-html[data-theme="dark"] {
-  --ifm-color-primary: #818cf8;
-  --ifm-color-primary-dark: #6875f6;
-  --ifm-color-primary-darker: #5b69f5;
-  --ifm-color-primary-darkest: #3346f2;
-  --ifm-color-primary-light: #9aa3fa;
-  --ifm-color-primary-lighter: #a7affb;
-  --ifm-color-primary-lightest: #ced3fd;
-
-  --ifm-background-color: #0b0c14;
-  --ifm-background-surface-color: #11121d;
-  --ifm-navbar-background-color: rgb(11 12 20 / 72%);
-  --docusaurus-highlighted-code-line-bg: rgb(129 140 248 / 16%);
-
-  --adr-gradient: linear-gradient(120deg, #818cf8 0%, #c084fc 50%, #22d3ee 100%);
-  --adr-border: rgb(148 163 184 / 14%);
-  --adr-surface: #12131f;
-  --adr-surface-muted: #161726;
-  --adr-primary-soft: rgb(129 140 248 / 14%);
-  --adr-shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
-  --adr-shadow-lg: 0 16px 40px -16px rgb(129 140 248 / 35%), 0 4px 12px -4px rgb(0 0 0 / 50%);
+body {
+  background-color: var(--adr-bg);
+  color: var(--adr-text);
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--ifm-color-primary) 25%, transparent);
+  background: var(--adr-accent-soft);
+  color: var(--adr-text);
 }
 
 :focus-visible {
-  outline: 2px solid var(--ifm-color-primary);
+  outline: 2px solid var(--adr-accent-text);
   outline-offset: 2px;
 }
 
-@keyframes adr-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes adr-fade-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-/* Navbar : verre dépoli, soulignement en dégradé qui se déploie au survol. */
+/* 5. Navbar : surface neutre, filet de 3 px à la couleur de la section. */
 
 .navbar {
-  border-bottom: 1px solid var(--adr-border);
-  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 3px solid var(--adr-accent);
 }
 
 .navbar__title {
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.navbar__logo {
-  transition: transform var(--adr-duration) var(--adr-ease-out);
-}
-
-.navbar__brand:hover .navbar__logo {
-  transform: rotate(-8deg) scale(1.06);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .navbar__item.navbar__link {
@@ -123,104 +220,147 @@ html[data-theme="dark"] {
   font-weight: 500;
 }
 
-.navbar__item.navbar__link::after {
+.navbar__item.navbar__link--active {
+  font-weight: 600;
+}
+
+.navbar__item.navbar__link--active::after {
   position: absolute;
   right: var(--ifm-navbar-item-padding-horizontal);
-  bottom: 0.2rem;
+  bottom: 0.15rem;
   left: var(--ifm-navbar-item-padding-horizontal);
   height: 2px;
   border-radius: 2px;
-  background: var(--adr-gradient);
+  background: var(--adr-accent);
   content: "";
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform var(--adr-duration) var(--adr-ease-out);
 }
 
-.navbar__item.navbar__link:hover::after,
-.navbar__item.navbar__link--active::after {
-  transform: scaleX(1);
+/* Pastille de la couleur de chaque package (navbar et menu mobile). */
+
+.navbar-package--react {
+  --adr-package-color: var(--adr-react);
+}
+
+.navbar-package--nest {
+  --adr-package-color: var(--adr-nest);
+}
+
+.navbar-package--misc {
+  --adr-package-color: var(--adr-misc);
+}
+
+.navbar-package::before {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: var(--adr-package-color);
+  content: "";
+  vertical-align: 0.1em;
 }
 
 .header-github-link::before {
   display: block;
-  width: 1.4rem;
-  height: 1.4rem;
+  width: 1.3rem;
+  height: 1.3rem;
   background-color: currentcolor;
   content: "";
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3'/%3E%3C/svg%3E")
     no-repeat center / contain;
-  transition: transform var(--adr-duration) var(--adr-ease-out);
-}
-
-.header-github-link:hover::before {
-  transform: scale(1.12);
 }
 
 .navbar__item.header-github-link::after {
   display: none;
 }
 
-/* Barre latérale : pastille pour la page active, léger décalage au survol. */
+/*
+ * Bascule clair / sombre : bouton bordé. Les classes du thème sont des modules CSS hachés
+ * (`colorModeToggle_xxxx`, `toggleButton_xxxx`), d'où les sélecteurs `[class*=…]`.
+ */
+.navbar [class*="toggleButton"] {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--adr-border);
+  border-radius: var(--adr-radius-sm);
+  color: var(--adr-text-2);
+  transition:
+    color var(--adr-duration) ease,
+    border-color var(--adr-duration) ease;
+}
+
+.navbar [class*="toggleButton"]:hover {
+  border-color: var(--adr-text-2);
+  background: transparent;
+  color: var(--adr-text);
+}
+
+/* 6. Barre latérale. */
 
 .menu {
   padding: 1rem 0.75rem;
 }
 
 .menu__link {
-  border-radius: 0.5rem;
+  border-radius: var(--adr-radius-sm);
   transition:
-    background-color var(--adr-duration) var(--adr-ease-out),
-    color var(--adr-duration) var(--adr-ease-out),
-    transform var(--adr-duration) var(--adr-ease-out);
+    background-color var(--adr-duration) ease,
+    color var(--adr-duration) ease;
 }
 
-.menu__link:hover {
-  transform: translateX(3px);
-}
-
-.menu__link--active:not(.menu__link--sublist) {
-  background: var(--adr-primary-soft);
-  box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+.menu__link--sublist,
+.menu__list-item-collapsible .menu__link {
+  color: var(--adr-text);
   font-weight: 600;
 }
 
-/* Contenu : apparition douce à chaque navigation (le composant est remonté à chaque page). */
-
-.theme-doc-markdown {
-  animation: adr-fade-up 450ms var(--adr-ease-out) both;
+.menu__link--active:not(.menu__link--sublist) {
+  font-weight: 600;
 }
 
-.theme-doc-toc-desktop,
-.theme-doc-breadcrumbs {
-  animation: adr-fade-in 600ms var(--adr-ease-out) both;
+/* 7. Contenu. */
+
+/* Badge du package en tête de chaque page de section. */
+html[data-adr-section="react"] .theme-doc-markdown::before {
+  content: "@etiennea20/adr-react";
+}
+
+html[data-adr-section="nest"] .theme-doc-markdown::before {
+  content: "@etiennea20/adr-nest";
+}
+
+html[data-adr-section="misc"] .theme-doc-markdown::before {
+  content: "@etiennea20/adr-misc";
+}
+
+.theme-doc-markdown::before {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  border-radius: 999px;
+  background: var(--adr-accent-soft);
+  color: var(--adr-accent-text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.15rem 0.65rem;
 }
 
 .markdown h1:first-child {
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.025em;
 }
 
 .markdown h2 {
   letter-spacing: -0.015em;
 }
 
+/* Liens soulignés : la couleur seule ne suffit pas à les distinguer du texte. */
 .markdown a:not(.hash-link, .card) {
-  background-image: linear-gradient(currentcolor, currentcolor);
-  background-position: 0 100%;
-  background-repeat: no-repeat;
-  background-size: 0% 1px;
-  text-decoration: none;
-  transition: background-size var(--adr-duration) var(--adr-ease-out);
-}
-
-.markdown a:not(.hash-link, .card):hover {
-  background-size: 100% 1px;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
 }
 
 .markdown :not(pre) > code {
   border: 1px solid var(--adr-border);
-  background: var(--adr-surface-muted);
   padding: 0.1rem 0.35rem;
 }
 
@@ -230,18 +370,16 @@ html[data-theme="dark"] {
   max-width: 100%;
   border: 1px solid var(--adr-border);
   border-collapse: separate;
-  border-radius: var(--ifm-global-radius);
+  border-radius: var(--adr-radius);
   border-spacing: 0;
-  box-shadow: var(--adr-shadow-sm);
 }
 
 .markdown table thead tr {
-  background: var(--adr-surface-muted);
+  background: var(--adr-muted);
 }
 
 .markdown table tr {
   border: 0;
-  transition: background-color var(--adr-duration) var(--adr-ease-out);
 }
 
 .markdown table th,
@@ -254,48 +392,32 @@ html[data-theme="dark"] {
   border-bottom: 0;
 }
 
-.markdown table tbody tr:hover {
-  background: color-mix(in srgb, var(--ifm-color-primary) 5%, transparent);
-}
-
 .theme-code-block {
   border: 1px solid var(--adr-border);
-  box-shadow: var(--adr-shadow-sm);
 }
 
 .theme-admonition {
-  border-width: 1px 1px 1px 4px;
-  border-style: solid;
-  border-color: var(--adr-border);
-  border-left-color: var(--ifm-alert-border-color);
-  box-shadow: var(--adr-shadow-sm);
+  border: 1px solid var(--adr-border);
+  border-left: 4px solid var(--ifm-alert-border-color);
 }
 
-/* Cartes (index de catégorie) et pagination : soulèvement et halo au survol. */
+/* Cartes (index de catégorie) et pagination : bordure fine, accent au survol. */
 
 .pagination-nav__link,
 .markdown a.card {
   border: 1px solid var(--adr-border);
-  border-radius: var(--ifm-global-radius);
-  transition:
-    transform var(--adr-duration) var(--adr-ease-out),
-    box-shadow var(--adr-duration) var(--adr-ease-out),
-    border-color var(--adr-duration) var(--adr-ease-out);
+  border-radius: var(--adr-radius);
+  background: var(--adr-surface);
+  transition: border-color var(--adr-duration) ease;
 }
 
 .pagination-nav__link:hover,
 .markdown a.card:hover {
-  border-color: color-mix(in srgb, var(--ifm-color-primary) 45%, transparent);
-  box-shadow: var(--adr-shadow-lg);
-  transform: translateY(-3px);
+  border-color: var(--adr-accent);
 }
 
-.breadcrumbs__link {
-  transition: background-color var(--adr-duration) var(--adr-ease-out);
-}
-
-.table-of-contents__link {
-  transition: color var(--adr-duration) var(--adr-ease-out);
+.breadcrumbs__item--active .breadcrumbs__link {
+  color: var(--adr-accent-text);
 }
 
 .table-of-contents__link--active {
@@ -306,35 +428,73 @@ html[data-theme="dark"] {
   border-top: 1px solid var(--adr-border);
 }
 
+/* 8. Boutons. */
+
 .button {
+  border-radius: var(--adr-radius-sm);
+  font-weight: 600;
   transition:
-    transform var(--adr-duration) var(--adr-ease-out),
-    box-shadow var(--adr-duration) var(--adr-ease-out),
-    background-color var(--adr-duration) var(--adr-ease-out);
+    background-color var(--adr-duration) ease,
+    border-color var(--adr-duration) ease,
+    color var(--adr-duration) ease;
 }
 
-.button:hover {
-  transform: translateY(-2px);
+.button--primary {
+  --ifm-button-background-color: var(--adr-accent);
+  --ifm-button-border-color: var(--adr-accent);
+  --ifm-button-color: var(--adr-accent-contrast);
+
+  color: var(--adr-accent-contrast);
 }
 
-.button--primary,
 .button--primary:hover {
-  border: 0;
-  background: var(--adr-gradient-strong);
-  box-shadow: var(--adr-shadow-lg);
-  color: #fff;
+  --ifm-button-background-color: var(--adr-accent-hover);
+  --ifm-button-border-color: var(--adr-accent-hover);
+
+  color: var(--adr-accent-contrast);
 }
 
-.button--secondary,
-.button--secondary:hover {
-  border: 1px solid var(--adr-border);
-  background: var(--adr-surface);
-  box-shadow: var(--adr-shadow-sm);
-  color: var(--ifm-font-color-base);
+/* `.button.button--secondary:not(.button--outline)` : Infima y fixe un texte gris foncé. */
+.button.button--secondary:not(.button--outline),
+.button.button--secondary:not(.button--outline):hover {
+  --ifm-button-background-color: var(--adr-surface);
+  --ifm-button-border-color: var(--adr-border);
+  --ifm-button-color: var(--adr-text);
+
+  color: var(--adr-text);
 }
 
-.button--secondary:hover {
-  border-color: color-mix(in srgb, var(--ifm-color-primary) 45%, transparent);
+.button.button--secondary:not(.button--outline):hover {
+  --ifm-button-border-color: var(--adr-text-2);
+}
+
+/* 9. Mobile : bascule visible dans la barre, cibles tactiles de 44 px. */
+
+@media (width <= 996px) {
+  .navbar__items--right > [class*="colorModeToggle"] {
+    display: flex;
+  }
+
+  .navbar [class*="toggleButton"],
+  .navbar__toggle {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .navbar__toggle {
+    display: inline-grid;
+    place-items: center;
+    margin-right: 0.25rem;
+  }
+
+  .menu__link,
+  .menu__caret {
+    min-height: 2.75rem;
+  }
+
+  .menu__link {
+    align-items: center;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {

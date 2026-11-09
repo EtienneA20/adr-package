@@ -1,11 +1,11 @@
 import Link from "@docusaurus/Link";
-import type { PointerEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import styles from "./home.module.css";
 
 interface IPackageCard {
-  name: string;
-  to: string;
+  /** Section de la doc : choisit la palette de la carte (`data-package`). */
+  section: "react" | "nest" | "misc";
   description: string;
   tags: readonly string[];
   icon: ReactNode;
@@ -23,8 +23,7 @@ const ICON_PROPS = {
 
 const PACKAGES: readonly IPackageCard[] = [
   {
-    name: "adr-react",
-    to: "/react",
+    section: "react",
     description: "Composants et hooks React, chacun présenté avec une démo live modifiable.",
     tags: ["Composants", "Hooks", "Fetch", "Routing"],
     icon: (
@@ -37,8 +36,7 @@ const PACKAGES: readonly IPackageCard[] = [
     ),
   },
   {
-    name: "adr-nest",
-    to: "/nest",
+    section: "nest",
     description: "Utilitaires NestJS : droits, routes publiques, filtrage des requêtes et export.",
     tags: ["Guards", "Décorateurs", "Filtrage", "Excel"],
     icon: (
@@ -50,8 +48,7 @@ const PACKAGES: readonly IPackageCard[] = [
     ),
   },
   {
-    name: "adr-misc",
-    to: "/misc",
+    section: "misc",
     description: "Utilitaires TypeScript partagés entre front et back, rangés en 19 catégories.",
     tags: ["Async", "Dates", "Validation", "Formatage"],
     icon: (
@@ -62,40 +59,26 @@ const PACKAGES: readonly IPackageCard[] = [
   },
 ];
 
-/** Place le halo de la carte sous le pointeur (variables CSS lues par `.card::before`). */
-function trackPointer(event: PointerEvent<HTMLAnchorElement>): void {
-  const card = event.currentTarget;
-  const bounds = card.getBoundingClientRect();
-  card.style.setProperty("--pointer-x", `${String(event.clientX - bounds.left)}px`);
-  card.style.setProperty("--pointer-y", `${String(event.clientY - bounds.top)}px`);
-}
-
-/** Section listant les trois packages publiés, sous forme de cartes cliquables. */
+/** Section listant les trois packages publiés, chacun dans la couleur de sa section. */
 export function PackageGrid(): ReactNode {
   return (
     <section className={styles.section}>
       <div className="container">
         <h2 className={styles.sectionTitle}>Trois packages, une seule doc</h2>
-        <p className={styles.sectionLead}>
-          Chaque package a ses guides, sa référence API générée depuis le TSDoc et son inventaire
-          pour Claude Code.
-        </p>
         <div className={styles.grid}>
           {PACKAGES.map((item) => (
-            <Link key={item.name} to={item.to} className={styles.card} onPointerMove={trackPointer}>
+            <Link
+              key={item.section}
+              to={`/${item.section}`}
+              className={styles.card}
+              data-package={item.section}
+            >
               <span className={styles.icon}>{item.icon}</span>
-              <h3 className={styles.cardTitle}>@etiennea20/{item.name}</h3>
-              <p className={styles.cardText}>{item.description}</p>
-              <ul className={styles.tags}>
-                {item.tags.map((tag) => (
-                  <li key={tag}>{tag}</li>
-                ))}
-              </ul>
+              <span className={styles.cardTitle}>@etiennea20/adr-{item.section}</span>
+              <span className={styles.cardText}>{item.description}</span>
+              <span className={styles.tags}>{item.tags.join(" · ")}</span>
               <span className={styles.more}>
-                Voir la documentation
-                <span className={styles.arrow} aria-hidden="true">
-                  →
-                </span>
+                Voir la documentation <span aria-hidden="true">→</span>
               </span>
             </Link>
           ))}
