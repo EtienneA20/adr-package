@@ -1,5 +1,11 @@
 # @etiennea20/adr-misc
 
+## 0.4.0
+
+### Minor Changes
+
+- [#17](https://github.com/EtienneA20/adr-package/pull/17) [`6e4d499`](https://github.com/EtienneA20/adr-package/commit/6e4d49970abc4b31d5c601ed8da172cf34672d04) Thanks [@EtienneA20](https://github.com/EtienneA20)! - Ajoute `isSpreadsheetFormula` et `escapeSpreadsheetFormula` (neutralisation des formules dans un export pour tableur). `toCsv` (`escapeFormulas`) s'appuie dessus et neutralise désormais aussi les variantes pleine chasse `＝`, `＋`, `－`, `＠`.
+
 ## 0.3.0
 
 ### Minor Changes
