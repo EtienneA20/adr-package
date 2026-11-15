@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { PermissionsService } from "../../permissions";
+import { applyCriteriaInMemory } from "../apply-criteria-in-memory";
 import type { ICriteriaCondition, IListCriteria } from "../list-criteria";
 import { andCriteria } from "./and-criteria";
 
@@ -28,5 +30,29 @@ describe("andCriteria", () => {
     const criteria = { ...base, where: title };
     expect(andCriteria(criteria, owner).where).toEqual({ and: [title, owner] });
     expect(criteria.where).toBe(title);
+  });
+
+  it("accepte le périmètre de PermissionsService (même arbre neutre)", () => {
+    const permissions = new PermissionsService({
+      permissions: {
+        roles: {
+          member: [{ action: "read", resource: "loan", where: { ownerId: "$subject.id" } }],
+          librarian: [{ action: "manage", resource: "all" }],
+        },
+      },
+    });
+    const loans = [
+      { id: "l-1", ownerId: "m-1" },
+      { id: "l-2", ownerId: "m-2" },
+    ];
+    const scoped = (subject: { id: string; roles: string[] } | null): string[] =>
+      applyCriteriaInMemory(
+        loans,
+        andCriteria(base, permissions.scope(subject, "read", "loan")),
+      ).items.map((loan) => loan.id);
+
+    expect(scoped({ id: "m-1", roles: ["member"] })).toEqual(["l-1"]);
+    expect(scoped({ id: "b-1", roles: ["librarian"] })).toEqual(["l-1", "l-2"]);
+    expect(scoped(null)).toEqual([]);
   });
 });
