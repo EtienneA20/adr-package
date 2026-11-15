@@ -22,6 +22,15 @@ pnpm add @etiennea20/adr-nest
 peerDependencies (déjà présentes dans une application NestJS) : `@nestjs/common`,
 `@nestjs/core`, `reflect-metadata`, `rxjs`.
 
+Le sous-chemin `@etiennea20/adr-nest/filtering` (requêtes de liste) exige en plus
+`@etiennea20/adr-misc` (≥ 0.3) et `zod` (≥ 4), peerDependencies optionnelles :
+
+```sh
+pnpm add @etiennea20/adr-misc zod
+```
+
+`@etiennea20/adr-nest/prisma` (adaptateur Prisma) n'ajoute aucune dépendance.
+
 ## Exemple minimal
 
 ```ts

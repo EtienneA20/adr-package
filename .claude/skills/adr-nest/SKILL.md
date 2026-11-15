@@ -13,11 +13,13 @@ metadata:
 Utilitaires pour applications NestJS (11 ou 12), compilés en CommonJS avec les métadonnées de
 décorateurs (`emitDecoratorMetadata`).
 
-- Point d'entrée unique : `@etiennea20/adr-nest`.
+- Points d'entrée : `@etiennea20/adr-nest` (common, rights), `@etiennea20/adr-nest/filtering`
+  (exige `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4, peerDependencies optionnelles) et
+  `@etiennea20/adr-nest/prisma` (aucune dépendance).
 - peerDependencies : `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs`.
 - Catégories : `common` (format d'erreur d'API, exceptions, validation, éléments
-  transverses), `rights` (gestion des droits), `filtering` (filtrage avancé), `export` (export
-  Excel et JSON).
+  transverses), `rights` (gestion des droits), `filtering` (requêtes de liste, sous-chemin),
+  `prisma` (adaptateur, sous-chemin), `export` (export Excel et JSON).
 
 ## Catégories
 
@@ -25,7 +27,8 @@ décorateurs (`emitDecoratorMetadata`).
 - [rights](reference.md#rights) : gestion des droits
   - [`Public`](reference.md#public)
   - [`IS_PUBLIC_KEY`](reference.md#is_public_key)
-- `filtering` : filtrage avancé (aucun élément pour l'instant)
+- [filtering](reference.md#filtering) : requêtes de liste et critères, sous-chemin `/filtering` (`andCriteria`, `applyCriteriaInMemory`, `CriteriaNode`, `CriteriaValue`, `ICriteriaCondition`, `ICriteriaOrder`, `IListCriteria`, `IListCriteriaOptions`, `IListQueryParamOptions`, `ListQuery`, `ListQueryConfigError`, `parseListQuery`, `toListCriteria`, `toPage`)
+- [prisma](reference.md#prisma) : adaptateur Prisma, sous-chemin `/prisma` (`IPrismaFindArgs`, `toPrismaFindArgs`, `toPrismaWhere`)
 - `export` : export Excel et JSON (aucun élément pour l'instant)
 
 ## Retrouver un élément

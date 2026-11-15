@@ -14,11 +14,13 @@ description: >-
 Utilitaires pour applications NestJS (11 ou 12), compilés en CommonJS avec les métadonnées de
 décorateurs (`emitDecoratorMetadata`).
 
-- Point d'entrée unique : `@etiennea20/adr-nest`.
+- Points d'entrée : `@etiennea20/adr-nest` (common, rights), `@etiennea20/adr-nest/filtering`
+  (exige `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4, peerDependencies optionnelles) et
+  `@etiennea20/adr-nest/prisma` (aucune dépendance).
 - peerDependencies : `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs`.
 - Catégories : `common` (format d'erreur d'API, exceptions, validation, éléments
-  transverses), `rights` (gestion des droits), `filtering` (filtrage avancé), `export` (export
-  Excel et JSON).
+  transverses), `rights` (gestion des droits), `filtering` (requêtes de liste, sous-chemin),
+  `prisma` (adaptateur, sous-chemin), `export` (export Excel et JSON).
 
 ## Table des matières
 
@@ -26,7 +28,8 @@ décorateurs (`emitDecoratorMetadata`).
 - [rights](#rights) : gestion des droits
   - [`Public`](#public)
   - [`IS_PUBLIC_KEY`](#is_public_key)
-- `filtering` : filtrage avancé (aucun élément pour l'instant)
+- [filtering](#filtering) : requêtes de liste et critères, sous-chemin `/filtering` (`andCriteria`, `applyCriteriaInMemory`, `CriteriaNode`, `CriteriaValue`, `ICriteriaCondition`, `ICriteriaOrder`, `IListCriteria`, `IListCriteriaOptions`, `IListQueryParamOptions`, `ListQuery`, `ListQueryConfigError`, `parseListQuery`, `toListCriteria`, `toPage`)
+- [prisma](#prisma) : adaptateur Prisma, sous-chemin `/prisma` (`IPrismaFindArgs`, `toPrismaFindArgs`, `toPrismaWhere`)
 - `export` : export Excel et JSON (aucun élément pour l'instant)
 
 ## common
@@ -639,6 +642,628 @@ type InferSchemaOutput<S extends IStandardSchema> = NonNullable<S["~standard"]["
 import type { InferSchemaOutput } from "@etiennea20/adr-nest";
 
 type CreateBookInput = InferSchemaOutput<typeof createBookSchema>;
+```
+
+## filtering
+
+Sous-chemin `@etiennea20/adr-nest/filtering` (peerDependencies optionnelles `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4) : requêtes de liste validées par le contrat partagé avec le front (`defineListQuery`) et converties en critères neutres vis-à-vis de l'ORM. Jamais réexporté par l'entrée principale.
+
+### `ListQuery`
+
+| Champ          | Valeur                                        |
+| -------------- | --------------------------------------------- |
+| Catégorie      | `filtering`                                   |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`              |
+| Statut         | stable                                        |
+| Depuis         | 0.2.0                                         |
+| Source         | `src/filtering/list-query/list-query.ts`      |
+| Tests          | `src/filtering/list-query/list-query.test.ts` |
+
+**Signature**
+
+```ts
+function ListQuery<T extends FieldDefinitions>(
+  definition: IListQueryDefinition<T>,
+  options?: IListQueryParamOptions<T>,
+): ParameterDecorator;
+```
+
+**Description** : décorateur de paramètre : la requête de liste (filtre, `q`, tri, pagination, sélection) validée par le contrat et convertie en `IListCriteria`. Source `"query"` par défaut (un paramètre d'URL par clé, en JSON, convention TanStack Router) ou `"body"` (`POST …/search`). Colonnes vérifiées dès la déclaration. Requête invalide : la route n'est pas appelée, 400 `INVALID_QUERY` ou `QUERY_LIMIT_EXCEEDED` au format d'erreur d'API.
+
+**Paramètres**
+
+- `definition` : contrat de liste (`defineListQuery`), partagé avec le front.
+- `options` : `source` et `columns` (chemin de colonne par champ public, `authorName` → `author.name`).
+
+**Retour** : un décorateur de paramètre qui fournit les critères.
+
+**Erreurs** : `ListQueryConfigError` à la déclaration si `columns` est invalide ; `ValidationException` à l'exécution si la requête est invalide.
+
+**Exemple**
+
+```ts
+import { type IListCriteria, ListQuery, applyCriteriaInMemory } from "@etiennea20/adr-nest/filtering";
+
+@Get()
+list(@ListQuery(bookListQuery, { columns: { authorName: "author.name" } }) criteria: IListCriteria) {
+  return this.books.findPage(criteria);
+}
+```
+
+### `IListQueryParamOptions`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `filtering`                                               |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                          |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/filtering/parse-list-query/parse-list-query.ts`      |
+| Tests          | `src/filtering/parse-list-query/parse-list-query.test.ts` |
+
+**Signature**
+
+```ts
+interface IListQueryParamOptions<
+  T extends FieldDefinitions = FieldDefinitions,
+> extends IListCriteriaOptions<T> {
+  readonly source?: "query" | "body";
+}
+```
+
+**Description** : options de `ListQuery` et `parseListQuery` : forme de l'entrée (`"query"` par défaut, ou `"body"`) et chemins de colonnes.
+
+**Exemple**
+
+```ts
+import type { IListQueryParamOptions } from "@etiennea20/adr-nest/filtering";
+
+const options: IListQueryParamOptions = { source: "body", columns: { authorName: "author.name" } };
+```
+
+### `parseListQuery`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `filtering`                                               |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                          |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/filtering/parse-list-query/parse-list-query.ts`      |
+| Tests          | `src/filtering/parse-list-query/parse-list-query.test.ts` |
+
+**Signature**
+
+```ts
+function parseListQuery<T extends FieldDefinitions>(
+  definition: IListQueryDefinition<T>,
+  input: unknown,
+  options?: IListQueryParamOptions<T>,
+): IListCriteria;
+```
+
+**Description** : valide une requête de liste reçue du client et la convertit en critères (ce que fait `ListQuery`). À utiliser hors d'une route HTTP (file de messages, WebSocket).
+
+**Paramètres**
+
+- `definition` : contrat de liste.
+- `input` : `req.query` (source `"query"`) ou `req.body` (source `"body"`).
+- `options` : source et colonnes.
+
+**Retour** : les critères de liste.
+
+**Erreurs** : `ValidationException` 400 `QUERY_LIMIT_EXCEEDED` (limite du contrat dépassée) ou `INVALID_QUERY` (requête invalide), détail par champ ; `ListQueryConfigError` si `columns` est invalide.
+
+**Exemple**
+
+```ts
+import { parseListQuery } from "@etiennea20/adr-nest/filtering";
+
+const criteria = parseListQuery(bookListQuery, message.payload, { source: "body" });
+```
+
+### `toListCriteria`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `filtering`                                               |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                          |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/filtering/to-list-criteria/to-list-criteria.ts`      |
+| Tests          | `src/filtering/to-list-criteria/to-list-criteria.test.ts` |
+
+**Signature**
+
+```ts
+function toListCriteria<T extends FieldDefinitions>(
+  definition: IListQueryDefinition<T>,
+  query: IListQuery<T>,
+  options?: IListCriteriaOptions<T>,
+): IListCriteria;
+```
+
+**Description** : convertit une requête de liste **déjà validée** en critères : noms publics → chemins de colonnes, dates du contrat → `Date`, `q` → groupe `or` de `contains` insensibles à la casse sur les champs `search: true` (combiné au filtre par `and`), `skip`, `take = pageSize + 1`.
+
+**Paramètres**
+
+- `definition` : contrat de liste.
+- `query` : requête validée par `definition.schema` ou `searchParamsSchema`.
+- `options` : colonnes.
+
+**Retour** : les critères de liste.
+
+**Erreurs** : `ListQueryConfigError` si `columns` cite un champ absent du contrat ou un chemin invalide.
+
+**Exemple**
+
+```ts
+import { toListCriteria } from "@etiennea20/adr-nest/filtering";
+
+const criteria = toListCriteria(bookListQuery, bookListQuery.schema.parse(input), {
+  columns: { authorName: "author.name" },
+});
+```
+
+### `IListCriteriaOptions`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `filtering`                                               |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                          |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/filtering/to-list-criteria/to-list-criteria.ts`      |
+| Tests          | `src/filtering/to-list-criteria/to-list-criteria.test.ts` |
+
+**Signature**
+
+```ts
+interface IListCriteriaOptions<T extends FieldDefinitions = FieldDefinitions> {
+  readonly columns?: Partial<Record<keyof T & string, string>>;
+}
+```
+
+**Description** : options de conversion : chemin de colonne de chaque champ public, déclaré côté serveur (par défaut le nom du champ). Chemins : segments identifiants séparés par des points, sans `__proto__`.
+
+**Exemple**
+
+```ts
+import type { IListCriteriaOptions } from "@etiennea20/adr-nest/filtering";
+
+const options: IListCriteriaOptions = { columns: { authorName: "author.name" } };
+```
+
+### `applyCriteriaInMemory`
+
+| Champ          | Valeur                                                                    |
+| -------------- | ------------------------------------------------------------------------- |
+| Catégorie      | `filtering`                                                               |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                                          |
+| Statut         | stable                                                                    |
+| Depuis         | 0.2.0                                                                     |
+| Source         | `src/filtering/apply-criteria-in-memory/apply-criteria-in-memory.ts`      |
+| Tests          | `src/filtering/apply-criteria-in-memory/apply-criteria-in-memory.test.ts` |
+
+**Signature**
+
+```ts
+function applyCriteriaInMemory<T>(items: readonly T[], criteria: IListCriteria): IPage<T>;
+```
+
+**Description** : applique des critères à un tableau en mémoire : filtre, tri (valeurs absentes en dernier, texte en français), pagination et total si `withTotal`. Même sémantique que les adaptateurs (texte insensible à la casse par défaut, dates comparées en tant que dates, y compris stockées en texte ISO). `select` n'est pas appliqué. Pour les petites listes, les démonstrations et les tests.
+
+**Paramètres**
+
+- `items` : éléments (non modifiés).
+- `criteria` : critères de la requête.
+
+**Retour** : la page de résultats (`IPage` d'adr-misc).
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { applyCriteriaInMemory } from "@etiennea20/adr-nest/filtering";
+
+return applyCriteriaInMemory(this.repository.findAll(), criteria);
+```
+
+### `toPage`
+
+| Champ          | Valeur                                  |
+| -------------- | --------------------------------------- |
+| Catégorie      | `filtering`                             |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`        |
+| Statut         | stable                                  |
+| Depuis         | 0.2.0                                   |
+| Source         | `src/filtering/to-page/to-page.ts`      |
+| Tests          | `src/filtering/to-page/to-page.test.ts` |
+
+**Signature**
+
+```ts
+function toPage<T>(
+  rows: readonly T[],
+  criteria: Pick<IListCriteria, "page" | "pageSize">,
+  total?: number,
+): IPage<T>;
+```
+
+**Description** : construit la page de résultats (`IPage`, format partagé avec le front) à partir des lignes lues avec `criteria.take` : la ligne en plus est retirée et donne `hasNextPage` ; `total` et `pageCount` seulement si `total` est fourni.
+
+**Paramètres**
+
+- `rows` : lignes lues (au plus `criteria.take`).
+- `criteria` : page et taille de page.
+- `total` : nombre total, si le comptage a été fait.
+
+**Retour** : la page de résultats.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { toPage } from "@etiennea20/adr-nest/filtering";
+
+const [rows, total] = await Promise.all([
+  prisma.book.findMany(args),
+  criteria.withTotal ? prisma.book.count({ where: args.where }) : undefined,
+]);
+return toPage(rows, criteria, total);
+```
+
+### `andCriteria`
+
+| Champ          | Valeur                                            |
+| -------------- | ------------------------------------------------- |
+| Catégorie      | `filtering`                                       |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                  |
+| Statut         | stable                                            |
+| Depuis         | 0.2.0                                             |
+| Source         | `src/filtering/and-criteria/and-criteria.ts`      |
+| Tests          | `src/filtering/and-criteria/and-criteria.test.ts` |
+
+**Signature**
+
+```ts
+function andCriteria(criteria: IListCriteria, condition: CriteriaNode): IListCriteria;
+```
+
+**Description** : ajoute une condition **de confiance** du serveur (périmètre de droits, état imposé) aux critères d'une requête client, par `and`. La condition n'est pas soumise à la liste blanche et utilise des chemins de colonnes.
+
+**Paramètres**
+
+- `criteria` : critères de la requête client.
+- `condition` : condition imposée par le serveur.
+
+**Retour** : de nouveaux critères (les originaux ne sont pas modifiés).
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { andCriteria } from "@etiennea20/adr-nest/filtering";
+
+const scoped = andCriteria(criteria, {
+  path: "ownerId",
+  op: "eq",
+  value: member.id,
+  caseSensitive: false,
+});
+```
+
+### `ListQueryConfigError`
+
+| Champ          | Valeur                                                                  |
+| -------------- | ----------------------------------------------------------------------- |
+| Catégorie      | `filtering`                                                             |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                                        |
+| Statut         | stable                                                                  |
+| Depuis         | 0.2.0                                                                   |
+| Source         | `src/filtering/list-query-config-error/list-query-config-error.ts`      |
+| Tests          | `src/filtering/list-query-config-error/list-query-config-error.test.ts` |
+
+**Signature**
+
+```ts
+class ListQueryConfigError extends Error {
+  readonly name: "ListQueryConfigError";
+}
+```
+
+**Description** : erreur de configuration côté serveur (colonne pour un champ absent du contrat, chemin invalide), levée au démarrage ou au premier appel, jamais à cause d'une requête client.
+
+**Exemple**
+
+```ts
+import { ListQuery } from "@etiennea20/adr-nest/filtering";
+
+// Lève ListQueryConfigError au chargement du contrôleur : « isbn » n'est pas dans le contrat.
+ListQuery(bookListQuery, { columns: { isbn: "isbn13" } });
+```
+
+### `IListCriteria`
+
+| Champ          | Valeur                                              |
+| -------------- | --------------------------------------------------- |
+| Catégorie      | `filtering`                                         |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                    |
+| Statut         | stable                                              |
+| Depuis         | 0.2.0                                               |
+| Source         | `src/filtering/list-criteria/list-criteria.ts`      |
+| Tests          | `src/filtering/list-criteria/list-criteria.test.ts` |
+
+**Signature**
+
+```ts
+interface IListCriteria {
+  readonly where?: CriteriaNode | undefined;
+  readonly orderBy: readonly ICriteriaOrder[];
+  readonly select?: readonly string[] | undefined;
+  readonly skip: number;
+  readonly take: number;
+  readonly page: number;
+  readonly pageSize: number;
+  readonly withTotal: boolean;
+}
+```
+
+**Description** : critères de liste, neutres vis-à-vis de l'ORM : filtre et recherche combinés (`where`), tri, colonnes sélectionnées, `skip`, `take` (`pageSize + 1`, la ligne en plus indique la page suivante), page, taille, comptage. Uniquement des chemins issus de la liste blanche du serveur et des valeurs validées.
+
+**Exemple**
+
+```ts
+import type { IListCriteria } from "@etiennea20/adr-nest/filtering";
+
+function offset(criteria: IListCriteria): number {
+  return criteria.skip;
+}
+```
+
+### `CriteriaNode`
+
+| Champ          | Valeur                                              |
+| -------------- | --------------------------------------------------- |
+| Catégorie      | `filtering`                                         |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                    |
+| Statut         | stable                                              |
+| Depuis         | 0.2.0                                               |
+| Source         | `src/filtering/list-criteria/list-criteria.ts`      |
+| Tests          | `src/filtering/list-criteria/list-criteria.test.ts` |
+
+**Signature**
+
+```ts
+type CriteriaNode =
+  | ICriteriaCondition
+  | { readonly and: readonly CriteriaNode[] }
+  | { readonly or: readonly CriteriaNode[] }
+  | { readonly not: CriteriaNode };
+```
+
+**Description** : nœud de l'arbre de critères : une condition ou un groupe `and`, `or`, `not`.
+
+**Exemple**
+
+```ts
+import type { CriteriaNode } from "@etiennea20/adr-nest/filtering";
+
+const node: CriteriaNode = { or: [conditionA, { not: conditionB }] };
+```
+
+### `ICriteriaCondition`
+
+| Champ          | Valeur                                              |
+| -------------- | --------------------------------------------------- |
+| Catégorie      | `filtering`                                         |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                    |
+| Statut         | stable                                              |
+| Depuis         | 0.2.0                                               |
+| Source         | `src/filtering/list-criteria/list-criteria.ts`      |
+| Tests          | `src/filtering/list-criteria/list-criteria.test.ts` |
+
+**Signature**
+
+```ts
+interface ICriteriaCondition {
+  readonly path: string;
+  readonly op: EFilterOperator;
+  readonly value: CriteriaValue;
+  readonly caseSensitive: boolean;
+}
+```
+
+**Description** : condition de critères : chemin de colonne (serveur), opérateur du contrat, valeur convertie (dates en `Date`), respect de la casse (opérateurs de texte, `false` par défaut).
+
+**Exemple**
+
+```ts
+import type { ICriteriaCondition } from "@etiennea20/adr-nest/filtering";
+
+const condition: ICriteriaCondition = {
+  path: "author.name",
+  op: "contains",
+  value: "zola",
+  caseSensitive: false,
+};
+```
+
+### `ICriteriaOrder`
+
+| Champ          | Valeur                                              |
+| -------------- | --------------------------------------------------- |
+| Catégorie      | `filtering`                                         |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                    |
+| Statut         | stable                                              |
+| Depuis         | 0.2.0                                               |
+| Source         | `src/filtering/list-criteria/list-criteria.ts`      |
+| Tests          | `src/filtering/list-criteria/list-criteria.test.ts` |
+
+**Signature**
+
+```ts
+interface ICriteriaOrder {
+  readonly path: string;
+  readonly direction: ISortItem["direction"];
+}
+```
+
+**Description** : critère de tri : chemin de colonne et sens (`asc` ou `desc`).
+
+**Exemple**
+
+```ts
+import type { ICriteriaOrder } from "@etiennea20/adr-nest/filtering";
+
+const order: ICriteriaOrder = { path: "publishedAt", direction: "desc" };
+```
+
+### `CriteriaValue`
+
+| Champ          | Valeur                                              |
+| -------------- | --------------------------------------------------- |
+| Catégorie      | `filtering`                                         |
+| Point d'entrée | `@etiennea20/adr-nest/filtering`                    |
+| Statut         | stable                                              |
+| Depuis         | 0.2.0                                               |
+| Source         | `src/filtering/list-criteria/list-criteria.ts`      |
+| Tests          | `src/filtering/list-criteria/list-criteria.test.ts` |
+
+**Signature**
+
+```ts
+type CriteriaValue =
+  string | number | boolean | Date | readonly (string | number | boolean | Date)[];
+```
+
+**Description** : valeur d'une condition : simple (dates converties en `Date`), couple `[min, max]` ou liste.
+
+**Exemple**
+
+```ts
+import type { CriteriaValue } from "@etiennea20/adr-nest/filtering";
+
+const value: CriteriaValue = [new Date("2020-01-01"), new Date("2020-12-31")];
+```
+
+## prisma
+
+Sous-chemin `@etiennea20/adr-nest/prisma` : adaptateur des critères de liste (`filtering`) vers les arguments de Prisma. Objets simples : aucune dépendance à `@prisma/client`.
+
+### `toPrismaFindArgs`
+
+| Champ          | Valeur                                                       |
+| -------------- | ------------------------------------------------------------ |
+| Catégorie      | `prisma`                                                     |
+| Point d'entrée | `@etiennea20/adr-nest/prisma`                                |
+| Statut         | stable                                                       |
+| Depuis         | 0.2.0                                                        |
+| Source         | `src/prisma/to-prisma-find-args/to-prisma-find-args.ts`      |
+| Tests          | `src/prisma/to-prisma-find-args/to-prisma-find-args.test.ts` |
+
+**Signature**
+
+```ts
+function toPrismaFindArgs(criteria: IListCriteria): IPrismaFindArgs;
+```
+
+**Description** : convertit des critères de liste en arguments `findMany` de Prisma : `where`, `orderBy`, `select` (relations en `select` imbriqué), `skip`, `take`. Chemins de relation (`author.name`) en objets imbriqués : relations « vers un » uniquement. Texte insensible à la casse (`mode: "insensitive"`, PostgreSQL) sauf `caseSensitive`. Le `where` sert aussi à `count`.
+
+**Paramètres**
+
+- `criteria` : critères de liste.
+
+**Retour** : les arguments `findMany` (à passer au client généré avec une assertion de type).
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { toPage } from "@etiennea20/adr-nest/filtering";
+import { toPrismaFindArgs } from "@etiennea20/adr-nest/prisma";
+
+const args = toPrismaFindArgs(criteria);
+const [rows, total] = await Promise.all([
+  prisma.book.findMany(args as Prisma.BookFindManyArgs),
+  criteria.withTotal
+    ? prisma.book.count({ where: args.where as Prisma.BookWhereInput })
+    : undefined,
+]);
+return toPage(rows, criteria, total);
+```
+
+### `toPrismaWhere`
+
+| Champ          | Valeur                                                       |
+| -------------- | ------------------------------------------------------------ |
+| Catégorie      | `prisma`                                                     |
+| Point d'entrée | `@etiennea20/adr-nest/prisma`                                |
+| Statut         | stable                                                       |
+| Depuis         | 0.2.0                                                        |
+| Source         | `src/prisma/to-prisma-find-args/to-prisma-find-args.ts`      |
+| Tests          | `src/prisma/to-prisma-find-args/to-prisma-find-args.test.ts` |
+
+**Signature**
+
+```ts
+function toPrismaWhere(node: CriteriaNode): Record<string, unknown>;
+```
+
+**Description** : convertit un arbre de critères en filtre `where` de Prisma : `AND`, `OR`, `NOT` ; `eq` → `equals`, `ne` → `not`, `nin` → `notIn`, `between` → `gte` + `lte`, `isNull` → `equals: null` / `not: null`.
+
+**Paramètres**
+
+- `node` : arbre de critères.
+
+**Retour** : le filtre Prisma.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { toPrismaWhere } from "@etiennea20/adr-nest/prisma";
+
+toPrismaWhere({ path: "author.name", op: "contains", value: "zola", caseSensitive: false });
+// { author: { name: { contains: "zola", mode: "insensitive" } } }
+```
+
+### `IPrismaFindArgs`
+
+| Champ          | Valeur                                                       |
+| -------------- | ------------------------------------------------------------ |
+| Catégorie      | `prisma`                                                     |
+| Point d'entrée | `@etiennea20/adr-nest/prisma`                                |
+| Statut         | stable                                                       |
+| Depuis         | 0.2.0                                                        |
+| Source         | `src/prisma/to-prisma-find-args/to-prisma-find-args.ts`      |
+| Tests          | `src/prisma/to-prisma-find-args/to-prisma-find-args.test.ts` |
+
+**Signature**
+
+```ts
+interface IPrismaFindArgs {
+  where?: Record<string, unknown> | undefined;
+  orderBy: Record<string, unknown>[];
+  select?: Record<string, unknown> | undefined;
+  skip: number;
+  take: number;
+}
+```
+
+**Description** : arguments `findMany` produits par `toPrismaFindArgs` : objets simples, à passer au client généré avec une assertion vers ses types (`as Prisma.BookFindManyArgs`).
+
+**Exemple**
+
+```ts
+import type { IPrismaFindArgs } from "@etiennea20/adr-nest/prisma";
+
+const args: IPrismaFindArgs = toPrismaFindArgs(criteria);
 ```
 
 ## rights

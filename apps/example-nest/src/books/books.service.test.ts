@@ -1,19 +1,35 @@
+import { parseListQuery } from "@etiennea20/adr-nest/filtering";
 import { NotFoundException } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
 
 import { BOOKS } from "./book";
+import { bookListQuery } from "./book-list-query";
 import { BooksRepository } from "./books.repository";
 import { BooksService } from "./books.service";
+
+function titles(service: BooksService, input: object): string[] {
+  return service
+    .findPage(parseListQuery(bookListQuery, input, { source: "body" }))
+    .items.map((book) => book.title);
+}
 
 describe("BooksService", () => {
   const service = new BooksService(new BooksRepository());
 
-  it("liste le catalogue", () => {
-    expect(service.list().map((book) => book.title)).toEqual([
-      "Les Misérables",
-      "Dune",
+  it("liste le catalogue trié par titre (tri par défaut du contrat)", () => {
+    expect(titles(service, {})).toEqual(["Dune", "Germinal", "Les Misérables"]);
+  });
+
+  it("filtre, recherche et pagine selon le contrat", () => {
+    expect(titles(service, { filter: { field: "status", op: "eq", value: "available" } })).toEqual([
       "Germinal",
+      "Les Misérables",
     ]);
+    expect(titles(service, { q: "HUGO" })).toEqual(["Les Misérables"]);
+    expect(
+      titles(service, { filter: { field: "publishedAt", op: "lt", value: "1870-01-01" } }),
+    ).toEqual(["Les Misérables"]);
+    expect(titles(service, { pageSize: 1, page: 2 })).toEqual(["Germinal"]);
   });
 
   it("renvoie un livre par identifiant", () => {
@@ -27,9 +43,9 @@ describe("BooksService", () => {
   });
 
   it("renvoie des copies : modifier un résultat ne modifie pas le dépôt", () => {
-    const [first] = service.list();
-    if (first) first.title = "modifié";
-    expect(service.list()[0]?.title).toBe("Les Misérables");
+    const book = service.get(BOOKS[0]?.id ?? "");
+    book.title = "modifié";
+    expect(service.get(BOOKS[0]?.id ?? "").title).toBe("Les Misérables");
   });
 });
 

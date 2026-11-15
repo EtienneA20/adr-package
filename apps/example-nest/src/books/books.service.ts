@@ -1,3 +1,5 @@
+import type { IPage } from "@etiennea20/adr-misc/contract";
+import { type IListCriteria, applyCriteriaInMemory } from "@etiennea20/adr-nest/filtering";
 import { Injectable, NotFoundException } from "@nestjs/common";
 
 import type { IBook } from "./book";
@@ -8,9 +10,12 @@ import { BooksRepository } from "./books.repository";
 export class BooksService {
   constructor(private readonly repository: BooksRepository) {}
 
-  list(): IBook[] {
-    return this.repository.findAll();
+  // #region find-page
+  findPage(criteria: IListCriteria): IPage<IBook> {
+    // Dépôt en mémoire : mêmes critères que l'adaptateur Prisma (voir prisma-books.repository.ts).
+    return applyCriteriaInMemory(this.repository.findAll(), criteria);
   }
+  // #endregion find-page
 
   get(id: string): IBook {
     const book = this.repository.findById(id);
