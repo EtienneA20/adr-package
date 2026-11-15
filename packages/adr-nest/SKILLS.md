@@ -27,7 +27,7 @@ décorateurs (`emitDecoratorMetadata`).
 
 ## Table des matières
 
-- [common](#common) : format d'erreur d'API, exceptions et validation (`API_ERROR_CONTENT_TYPE`, `ApiException`, `apiValidationExceptionFactory`, `EApiErrorCode`, `IApiError`, `IApiErrorIssue`, `IApiExceptionOptions`, `InferSchemaOutput`, `IStandardSchema`, `IStandardSchemaIssue`, `IValidationExceptionOptions`, `SchemaValidationPipe`, `StandardSchemaResult`, `ValidationException`, `ValidBody`, `ValidQuery`)
+- [common](#common) : format d'erreur d'API, exceptions, validation, filtre d'exceptions, journalisation et modules configurables (`API_ERROR_CONTENT_TYPE`, `ApiException`, `ApiExceptionFilter`, `apiValidationExceptionFactory`, `defineConfigurableModule`, `EApiErrorCode`, `IApiError`, `IApiErrorIssue`, `IApiExceptionOptions`, `IConfigurableModuleDefinition`, `InferSchemaInput`, `InferSchemaOutput`, `IStandardSchema`, `IStandardSchemaIssue`, `IValidationExceptionOptions`, `ModuleOptionsError`, `REQUEST_ID_HEADER`, `RequestId`, `requestIdOf`, `RequestLoggingInterceptor`, `SchemaValidationPipe`, `StandardSchemaResult`, `ValidationException`, `ValidBody`, `ValidQuery`)
 - [permissions](#permissions) : permissions à refus par défaut, règles sérialisables (`Authenticated`, `Can`, `CurrentSubject`, `definePermissions`, `IPermissionCondition`, `IPermissionRule`, `IPermissionsDefinition`, `IPermissionsModuleOptions`, `IPermissionSubject`, `IS_PUBLIC_KEY`, `PermissionConditionValue`, `PermissionDeniedException`, `PermissionScope`, `PermissionsConfigError`, `PermissionsGuard`, `PermissionsModule`, `PermissionsService`, `Public`, `SubjectResolver`, `UnauthenticatedException`)
 - [filtering](#filtering) : requêtes de liste et critères, sous-chemin `/filtering` (`andCriteria`, `applyCriteriaInMemory`, `CriteriaNode`, `CriteriaValue`, `ICriteriaCondition`, `ICriteriaOrder`, `IListCriteria`, `IListCriteriaOptions`, `IListQueryParamOptions`, `ListQuery`, `ListQueryConfigError`, `parseListQuery`, `toListCriteria`, `toPage`)
 - [prisma](#prisma) : adaptateur Prisma, sous-chemin `/prisma` (`IPrismaFindArgs`, `toPrismaFindArgs`, `toPrismaWhere`)
@@ -36,7 +36,7 @@ décorateurs (`emitDecoratorMetadata`).
 
 ## common
 
-Format d'erreur d'API (RFC 9457 + `code`), exceptions et validation par schéma Standard Schema (zod 4). Aucune dépendance au-delà des peerDependencies NestJS.
+Format d'erreur d'API (RFC 9457 + `code`), exceptions, validation par schéma Standard Schema (zod 4), filtre d'exceptions global, journalisation des requêtes avec identifiant de corrélation et modules dynamiques à options validées. Aucune dépendance au-delà des peerDependencies NestJS.
 
 ### `SchemaValidationPipe`
 
@@ -644,6 +644,337 @@ type InferSchemaOutput<S extends IStandardSchema> = NonNullable<S["~standard"]["
 import type { InferSchemaOutput } from "@etiennea20/adr-nest";
 
 type CreateBookInput = InferSchemaOutput<typeof createBookSchema>;
+```
+
+### `ApiExceptionFilter`
+
+| Champ          | Valeur                                                         |
+| -------------- | -------------------------------------------------------------- |
+| Catégorie      | `common`                                                       |
+| Point d'entrée | `@etiennea20/adr-nest`                                         |
+| Statut         | stable                                                         |
+| Depuis         | 0.2.0                                                          |
+| Source         | `src/common/api-exception-filter/api-exception-filter.ts`      |
+| Tests          | `src/common/api-exception-filter/api-exception-filter.test.ts` |
+
+**Signature**
+
+```ts
+@Catch()
+class ApiExceptionFilter implements ExceptionFilter {
+  constructor(adapterHost: HttpAdapterHost);
+  catch(exception: unknown, host: ArgumentsHost): void;
+}
+```
+
+**Description** : filtre d'exceptions global : toute erreur d'une requête HTTP devient une réponse au format d'erreur d'API (RFC 9457 + `code`, `application/problem+json`). `ApiException` : corps tel quel ; `HttpException` de NestJS : code et titre français déduits du statut, message personnalisé en `detail`, liste de messages en `errors` ; toute autre erreur : 500 `INTERNAL_ERROR` **sans** son message, journalisée avec sa pile. Ajoute `instance` (chemin sans paramètres d'URL) et `requestId` (aussi dans l'en-tête `x-request-id`). Indépendant de la plateforme (adaptateur HTTP de NestJS). Si l'envoi a commencé (export en flux), la réponse est close. Hors HTTP, l'exception est relancée.
+
+**Paramètres**
+
+- `exception` : exception levée.
+- `host` : contexte de la requête.
+
+**Retour** : rien (la réponse est envoyée).
+
+**Erreurs** : relance l'exception hors contexte HTTP.
+
+**Exemple**
+
+```ts
+import { ApiExceptionFilter } from "@etiennea20/adr-nest";
+import { APP_FILTER } from "@nestjs/core";
+
+@Module({ providers: [{ provide: APP_FILTER, useClass: ApiExceptionFilter }] })
+export class AppModule {}
+```
+
+### `RequestLoggingInterceptor`
+
+| Champ          | Valeur                                                                       |
+| -------------- | ---------------------------------------------------------------------------- |
+| Catégorie      | `common`                                                                     |
+| Point d'entrée | `@etiennea20/adr-nest`                                                       |
+| Statut         | stable                                                                       |
+| Depuis         | 0.2.0                                                                        |
+| Source         | `src/common/request-logging-interceptor/request-logging-interceptor.ts`      |
+| Tests          | `src/common/request-logging-interceptor/request-logging-interceptor.test.ts` |
+
+**Signature**
+
+```ts
+class RequestLoggingInterceptor implements NestInterceptor {
+  constructor(adapterHost: HttpAdapterHost);
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown>;
+}
+```
+
+**Description** : une ligne de journal par requête HTTP (`GET /livres 200 12 ms [<requestId>]`, contexte `HTTP` du `Logger` de NestJS) : `log` en succès, `warn` en 4xx, `error` en 5xx (la pile est journalisée par `ApiExceptionFilter`). Pose l'en-tête `x-request-id` sur la réponse. Chemin écrit sans paramètres d'URL. Statut de succès : `@HttpCode`, sinon 201 pour `POST` et 200. Une requête refusée par un guard n'atteint pas les intercepteurs.
+
+**Paramètres**
+
+- `context` : contexte d'exécution.
+- `next` : suite du traitement.
+
+**Retour** : le flux de la réponse, inchangé.
+
+**Erreurs** : aucune (les erreurs sont journalisées puis propagées).
+
+**Exemple**
+
+```ts
+import { RequestLoggingInterceptor } from "@etiennea20/adr-nest";
+import { APP_INTERCEPTOR } from "@nestjs/core";
+
+@Module({ providers: [{ provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor }] })
+export class AppModule {}
+```
+
+### `REQUEST_ID_HEADER`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `common`                                   |
+| Point d'entrée | `@etiennea20/adr-nest`                     |
+| Statut         | stable                                     |
+| Depuis         | 0.2.0                                      |
+| Source         | `src/common/request-id/request-id.ts`      |
+| Tests          | `src/common/request-id/request-id.test.ts` |
+
+**Signature**
+
+```ts
+const REQUEST_ID_HEADER: "x-request-id";
+```
+
+**Description** : en-tête HTTP de l'identifiant de corrélation, lu sur la requête et renvoyé dans la réponse.
+
+**Exemple**
+
+```ts
+import { REQUEST_ID_HEADER } from "@etiennea20/adr-nest";
+
+fetch("/api/livres", { headers: { [REQUEST_ID_HEADER]: crypto.randomUUID() } });
+```
+
+### `requestIdOf`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `common`                                   |
+| Point d'entrée | `@etiennea20/adr-nest`                     |
+| Statut         | stable                                     |
+| Depuis         | 0.2.0                                      |
+| Source         | `src/common/request-id/request-id.ts`      |
+| Tests          | `src/common/request-id/request-id.test.ts` |
+
+**Signature**
+
+```ts
+function requestIdOf(request: object): string;
+```
+
+**Description** : identifiant de corrélation d'une requête, attribué au premier appel puis mémorisé : l'en-tête `x-request-id` s'il est valide (`[A-Za-z0-9_.:-]`, 128 caractères au plus, ce qui empêche l'injection de lignes de journal), sinon un UUID. Partagé par l'intercepteur, le filtre et `RequestId`.
+
+**Paramètres**
+
+- `request` : objet requête (Express, Fastify).
+
+**Retour** : l'identifiant de corrélation.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { requestIdOf } from "@etiennea20/adr-nest";
+
+this.logger.log(`Export lancé [${requestIdOf(request)}]`);
+```
+
+### `RequestId`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `common`                                   |
+| Point d'entrée | `@etiennea20/adr-nest`                     |
+| Statut         | stable                                     |
+| Depuis         | 0.2.0                                      |
+| Source         | `src/common/request-id/request-id.ts`      |
+| Tests          | `src/common/request-id/request-id.test.ts` |
+
+**Signature**
+
+```ts
+function RequestId(): ParameterDecorator;
+```
+
+**Description** : décorateur de paramètre : injecte l'identifiant de corrélation de la requête (`requestIdOf`).
+
+**Paramètres**
+
+- aucun.
+
+**Retour** : un décorateur de paramètre.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { RequestId } from "@etiennea20/adr-nest";
+
+@Post()
+create(@RequestId() requestId: string, @ValidBody(createBookSchema) input: CreateBookInput) {
+  return this.books.create(input, { requestId });
+}
+```
+
+### `defineConfigurableModule`
+
+| Champ          | Valeur                                                                     |
+| -------------- | -------------------------------------------------------------------------- |
+| Catégorie      | `common`                                                                   |
+| Point d'entrée | `@etiennea20/adr-nest`                                                     |
+| Statut         | stable                                                                     |
+| Depuis         | 0.2.0                                                                      |
+| Source         | `src/common/define-configurable-module/define-configurable-module.ts`      |
+| Tests          | `src/common/define-configurable-module/define-configurable-module.test.ts` |
+
+**Signature**
+
+```ts
+function defineConfigurableModule<S extends IStandardSchema>(
+  definition: IConfigurableModuleDefinition<S>,
+): {
+  ConfigurableModuleClass: ConfigurableModuleCls<
+    InferSchemaInput<S>,
+    "forRoot",
+    "create",
+    { isGlobal: boolean }
+  >;
+  OPTIONS_TOKEN: symbol;
+  OPTIONS_TYPE: InferSchemaInput<S> & Partial<{ isGlobal: boolean }>;
+  ASYNC_OPTIONS_TYPE: ConfigurableModuleAsyncOptions<InferSchemaInput<S>, "create"> &
+    Partial<{ isGlobal: boolean }>;
+};
+```
+
+**Description** : crée la base d'un module dynamique `forRoot` / `forRootAsync` (sur `ConfigurableModuleBuilder` de NestJS, extra `isGlobal`) dont les options sont **validées par un schéma** au démarrage. Les options reçues ont le type d'entrée du schéma ; la valeur produite (défauts appliqués) est injectable avec `@Inject(OPTIONS_TOKEN)`. `OPTIONS_TYPE` et `ASYNC_OPTIONS_TYPE` ne servent qu'en type (`typeof`).
+
+**Paramètres**
+
+- `definition.name` : nom du module (messages d'erreur).
+- `definition.schema` : schéma Standard Schema (zod 4) des options.
+
+**Retour** : la classe à étendre, le jeton des options validées et les types des arguments.
+
+**Erreurs** : `ModuleOptionsError` au démarrage de l'application si les options ne respectent pas le schéma.
+
+**Exemple**
+
+```ts
+import { defineConfigurableModule } from "@etiennea20/adr-nest";
+
+export const { ConfigurableModuleClass, OPTIONS_TOKEN } = defineConfigurableModule({
+  name: "Reminders",
+  schema: z.object({ daysBeforeDue: z.int().min(1).max(30).default(3) }),
+});
+
+@Module({ providers: [RemindersService], exports: [RemindersService] })
+export class RemindersModule extends ConfigurableModuleClass {}
+```
+
+### `IConfigurableModuleDefinition`
+
+| Champ          | Valeur                                                                     |
+| -------------- | -------------------------------------------------------------------------- |
+| Catégorie      | `common`                                                                   |
+| Point d'entrée | `@etiennea20/adr-nest`                                                     |
+| Statut         | stable                                                                     |
+| Depuis         | 0.2.0                                                                      |
+| Source         | `src/common/define-configurable-module/define-configurable-module.ts`      |
+| Tests          | `src/common/define-configurable-module/define-configurable-module.test.ts` |
+
+**Signature**
+
+```ts
+interface IConfigurableModuleDefinition<S extends IStandardSchema> {
+  readonly name: string;
+  readonly schema: S;
+}
+```
+
+**Description** : paramètres de `defineConfigurableModule` : nom du module et schéma de ses options.
+
+**Exemple**
+
+```ts
+import type { IConfigurableModuleDefinition } from "@etiennea20/adr-nest";
+
+const definition: IConfigurableModuleDefinition<typeof remindersOptionsSchema> = {
+  name: "Reminders",
+  schema: remindersOptionsSchema,
+};
+```
+
+### `ModuleOptionsError`
+
+| Champ          | Valeur                                                         |
+| -------------- | -------------------------------------------------------------- |
+| Catégorie      | `common`                                                       |
+| Point d'entrée | `@etiennea20/adr-nest`                                         |
+| Statut         | stable                                                         |
+| Depuis         | 0.2.0                                                          |
+| Source         | `src/common/module-options-error/module-options-error.ts`      |
+| Tests          | `src/common/module-options-error/module-options-error.test.ts` |
+
+**Signature**
+
+```ts
+class ModuleOptionsError extends Error {
+  constructor(moduleName: string, issues: readonly IApiErrorIssue[]);
+  readonly moduleName: string;
+  readonly issues: readonly IApiErrorIssue[];
+}
+```
+
+**Description** : options invalides d'un module créé avec `defineConfigurableModule`, levée au démarrage ; le message liste chaque problème avec son chemin.
+
+**Exemple**
+
+```ts
+import { ModuleOptionsError } from "@etiennea20/adr-nest";
+
+await expect(
+  Test.createTestingModule({ imports: [RemindersModule.forRoot({ daysBeforeDue: 0 })] }).compile(),
+).rejects.toBeInstanceOf(ModuleOptionsError);
+```
+
+### `InferSchemaInput`
+
+| Champ          | Valeur                                               |
+| -------------- | ---------------------------------------------------- |
+| Catégorie      | `common`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                               |
+| Statut         | stable                                               |
+| Depuis         | 0.2.0                                                |
+| Source         | `src/common/standard-schema/standard-schema.ts`      |
+| Tests          | `src/common/standard-schema/standard-schema.test.ts` |
+
+**Signature**
+
+```ts
+type InferSchemaInput<S extends IStandardSchema> = NonNullable<S["~standard"]["types"]>["input"];
+```
+
+**Description** : type d'entrée d'un schéma Standard Schema (avant validation : champs avec valeur par défaut facultatifs).
+
+**Exemple**
+
+```ts
+import type { InferSchemaInput } from "@etiennea20/adr-nest";
+
+type RemindersInput = InferSchemaInput<typeof remindersOptionsSchema>; // { daysBeforeDue?: number }
 ```
 
 ## permissions

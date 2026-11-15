@@ -1,7 +1,12 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 
-import type { IStandardSchema, InferSchemaOutput, StandardSchemaResult } from "./standard-schema";
+import type {
+  IStandardSchema,
+  InferSchemaInput,
+  InferSchemaOutput,
+  StandardSchemaResult,
+} from "./standard-schema";
 
 const bookSchema = z.object({
   title: z.string(),
@@ -26,6 +31,16 @@ describe("InferSchemaOutput", () => {
     expectTypeOf<InferSchemaOutput<typeof bookSchema>>().toEqualTypeOf<{
       title: string;
       year: number;
+    }>();
+  });
+});
+
+describe("InferSchemaInput", () => {
+  it("donne le type d'entrée du schéma (valeurs par défaut facultatives)", () => {
+    const optionsSchema = z.object({ days: z.int().default(3) });
+    expect(optionsSchema.parse({})).toEqual({ days: 3 });
+    expectTypeOf<InferSchemaInput<typeof optionsSchema>>().toEqualTypeOf<{
+      days?: number | undefined;
     }>();
   });
 });

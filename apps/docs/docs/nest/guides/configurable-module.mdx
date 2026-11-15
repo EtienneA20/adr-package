@@ -1,0 +1,96 @@
+---
+title: Modules configurables
+---
+
+# Modules configurables
+
+`defineConfigurableModule` crée la base d'un module NestJS `forRoot` / `forRootAsync` dont les
+options sont **validées par un schéma** (zod 4) au démarrage : le schéma est la source de
+vérité de leur type, et une option invalide arrête l'application avec un message clair au
+lieu de produire un comportement faux plus tard.
+
+Les extraits viennent de l'[application d'exemple](./example-app) : un module de rappels qui
+liste les emprunts à rendre bientôt.
+
+## 1. Déclarer le schéma des options
+
+{/* snippet: apps/example-nest/src/reminders/reminders-options.ts#options */}
+
+```ts title="src/reminders/reminders-options.ts"
+// Le schéma est la source de vérité des options : type d'entrée (`daysBeforeDue` facultatif)
+// et type de sortie (valeur par défaut appliquée).
+export const remindersOptionsSchema = z.object({
+  daysBeforeDue: z.int().min(1).max(30).default(3),
+});
+
+export type RemindersOptions = z.output<typeof remindersOptionsSchema>;
+
+export const {
+  ConfigurableModuleClass: RemindersConfigurableModule,
+  OPTIONS_TOKEN: REMINDERS_OPTIONS,
+} = defineConfigurableModule({ name: "Reminders", schema: remindersOptionsSchema });
+```
+
+## 2. Étendre la classe produite
+
+{/* snippet: apps/example-nest/src/reminders/reminders.module.ts#module */}
+
+```ts title="src/reminders/reminders.module.ts"
+// `RemindersModule.forRoot({ daysBeforeDue: 5 })` ou `forRootAsync({ inject, useFactory })` :
+// options invalides → ModuleOptionsError au démarrage.
+@Module({
+  imports: [LoansModule],
+  providers: [RemindersService],
+  exports: [RemindersService],
+})
+export class RemindersModule extends RemindersConfigurableModule {}
+```
+
+## 3. Injecter les options validées
+
+{/* snippet: apps/example-nest/src/reminders/reminders.service.ts#service */}
+
+```ts title="src/reminders/reminders.service.ts"
+@Injectable()
+export class RemindersService {
+  constructor(
+    @Inject(REMINDERS_OPTIONS) private readonly options: RemindersOptions,
+    private readonly loans: LoansRepository,
+  ) {}
+
+  // Emprunts en cours à rendre d'ici `daysBeforeDue` jours (date du jour passée en paramètre :
+  // le service ne dépend pas de l'horloge).
+  dueSoon(today: Date): ILoan[] {
+    const from = today.toISOString().slice(0, 10);
+    const to = new Date(today.getTime() + this.options.daysBeforeDue * DAY_MS)
+      .toISOString()
+      .slice(0, 10);
+    return this.loans
+      .findAll()
+      .filter((loan) => loan.status === "active" && loan.dueAt >= from && loan.dueAt <= to);
+  }
+}
+```
+
+## Utilisation
+
+```ts
+RemindersModule.forRoot({ daysBeforeDue: 5 });
+RemindersModule.forRoot({}); // daysBeforeDue : 3 (valeur par défaut du schéma)
+RemindersModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({ daysBeforeDue: config.get("REMINDER_DAYS") }),
+});
+RemindersModule.forRoot({ daysBeforeDue: 5, isGlobal: true }); // options injectables partout
+```
+
+Avec `daysBeforeDue: 0`, le démarrage échoue :
+
+```text
+ModuleOptionsError: Options du module « Reminders » invalides :
+- daysBeforeDue : Too small: expected number to be >=1
+```
+
+Le module s'appuie sur `ConfigurableModuleBuilder` de NestJS : `forRootAsync` accepte aussi
+`useClass` et `useExisting`. `PermissionsModule` suit la même convention.

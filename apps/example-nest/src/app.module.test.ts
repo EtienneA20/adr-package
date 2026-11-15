@@ -6,6 +6,7 @@ import { AppModule } from "./app.module";
 import { BOOKS, BooksController, bookListQuery } from "./books";
 import { HealthController } from "./health";
 import { LoansController, loanListQuery } from "./loans";
+import { RemindersService } from "./reminders";
 
 describe("AppModule", () => {
   it("assemble l'application : injection des dépendances par constructeur comprise", async () => {
@@ -29,6 +30,12 @@ describe("AppModule", () => {
     const member = { id: "adherent-1", roles: ["member"] };
     expect(loans.list(member, parseListQuery(loanListQuery, {})).total).toBe(2);
     expect(loans.cancel(member, "emprunt-1").status).toBe("cancelled");
+
+    // Options validées : délai de 5 jours (forRoot de AppModule).
+    const reminders = moduleRef.get(RemindersService);
+    expect(reminders.dueSoon(new Date("2026-11-16T09:00:00Z")).map((loan) => loan.id)).toEqual([
+      "emprunt-2",
+    ]);
 
     await moduleRef.close();
   });
