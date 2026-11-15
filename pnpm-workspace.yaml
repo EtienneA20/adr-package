@@ -26,3 +26,16 @@ overrides:
   # eslint-plugin-tsdoc épingle une version de @typescript-eslint/utils qui refuse TypeScript 6 :
   # on l'aligne sur celle de typescript-eslint.
   "eslint-plugin-tsdoc>@typescript-eslint/utils": ^8.72.1
+  # Correctifs de sécurité (pnpm audit) des dépendances de build de la doc, en attendant que
+  # Docusaurus (3.10.2) relève ses plages. Vérifiés par un build complet de la doc, y compris
+  # avec le pool de threads SSG (tinypool ne sert qu'avec `future.faster.ssgWorkerThreads`,
+  # inactif ici). À retirer quand les versions parentes incluent le correctif.
+  # Restent signalés, sans correctif applicable et non exploitables ici :
+  # - deepmerge (GHSA-gcqx-w48m-w2h4, faible) : aucune version corrigée publiée ;
+  # - minimatch 10 (GHSA-g3hv-75wg-m249, modérée) : typedoc 0.28 et eslint-plugin-import-x 4.18
+  #   cassent avec minimatch 11 (API retirée) ; ils ne reçoivent que les motifs de notre
+  #   configuration, au build et au lint (pas d'entrée externe).
+  "@docusaurus/core>tinypool": ^2.2.0
+  "sockjs>uuid": ^11.1.1
+  serialize-javascript: ^7.1.4
+  joi: ^17.13.9
