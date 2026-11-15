@@ -13,14 +13,15 @@ documentation ne peut donc pas diverger du code qui fonctionne.
 
 ## Organisation
 
-| Dossier          | Contenu                                                           |
-| ---------------- | ----------------------------------------------------------------- |
-| `src/auth/`      | Règles de permissions et sujet (adhérent) de la requête           |
-| `src/books/`     | Catalogue : contrôleur, service, dépôt en mémoire                 |
-| `src/loans/`     | Emprunts : liste restreinte par les permissions, annulation       |
-| `src/reminders/` | Rappels : module configurable (`forRoot`, options validées)       |
-| `src/health/`    | Route de santé, publique                                          |
-| `*.test.ts`      | Tests Vitest avec `Test.createTestingModule`, sans base ni réseau |
+| Dossier               | Contenu                                                           |
+| --------------------- | ----------------------------------------------------------------- |
+| `src/auth/`           | Règles de permissions et sujet (adhérent) de la requête           |
+| `src/books/`          | Catalogue : contrôleur, service, dépôt en mémoire                 |
+| `src/loans/`          | Emprunts : liste restreinte par les permissions, annulation       |
+| `src/reminders/`      | Rappels : module configurable (`forRoot`, options validées)       |
+| `src/health/`         | Route de santé, publique                                          |
+| `*.test.ts`           | Tests Vitest avec `Test.createTestingModule`, sans base ni réseau |
+| `src/app.e2e.test.ts` | Bout en bout : vraies requêtes HTTP sur Express, en local         |
 
 L'application n'a pas de base de données : un dépôt en mémoire tient le catalogue, pour que
 l'exemple tourne partout (poste local, CI, image Docker). Une vraie application le remplace par
