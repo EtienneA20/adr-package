@@ -5,10 +5,13 @@ import { describe, expect, it } from "vitest";
 import { AppModule } from "./app.module";
 import { BOOKS, BooksController, bookListQuery } from "./books";
 import { HealthController } from "./health";
+import { LoansController, loanListQuery } from "./loans";
 
 describe("AppModule", () => {
   it("assemble l'application : injection des dépendances par constructeur comprise", async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    // Démarrage complet : le mode strict des permissions vérifie l'annotation de chaque route.
+    await moduleRef.init();
 
     expect(moduleRef.get(HealthController).check()).toEqual({ status: "ok" });
     const books = moduleRef.get(BooksController);
@@ -21,6 +24,11 @@ describe("AppModule", () => {
       books.create({ title: "Nana", authorName: "Zola", publishedAt: "1880-03-01" }).id,
     ).toBeTruthy();
     expect(books.update(BOOKS[1]?.id ?? "", { status: "available" }).status).toBe("available");
+
+    const loans = moduleRef.get(LoansController);
+    const member = { id: "adherent-1", roles: ["member"] };
+    expect(loans.list(member, parseListQuery(loanListQuery, {})).total).toBe(2);
+    expect(loans.cancel(member, "emprunt-1").status).toBe("cancelled");
 
     await moduleRef.close();
   });

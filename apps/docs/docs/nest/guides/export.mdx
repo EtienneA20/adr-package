@@ -83,6 +83,7 @@ blanche.
 {/* snippet: apps/example-nest/src/books/books.controller.ts#export-route */}
 
 ```ts title="src/books/books.controller.ts"
+@Can("export", "book") // bibliothécaires uniquement (règle `manage` sur `all`)
 @Get("export") // GET /livres/export?format=csv&filter=…&fields=["title","publishedAt"]
 @ExportHeaders()
 export(

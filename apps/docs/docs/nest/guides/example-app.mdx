@@ -15,8 +15,9 @@ documentation ne peut donc pas diverger du code qui fonctionne.
 
 | Dossier       | Contenu                                                           |
 | ------------- | ----------------------------------------------------------------- |
-| `src/auth/`   | Guard global d'authentification (lit `@Public()`)                 |
+| `src/auth/`   | Règles de permissions et sujet (adhérent) de la requête           |
 | `src/books/`  | Catalogue : contrôleur, service, dépôt en mémoire                 |
+| `src/loans/`  | Emprunts : liste restreinte par les permissions, annulation       |
 | `src/health/` | Route de santé, publique                                          |
 | `*.test.ts`   | Tests Vitest avec `Test.createTestingModule`, sans base ni réseau |
 

@@ -48,11 +48,13 @@ Deux façons, selon la version de NestJS :
 {/* snippet: apps/example-nest/src/books/books.controller.ts#validation */}
 
 ```ts title="src/books/books.controller.ts"
+@Can("create", "book")
 @Post() // NestJS 11 et 12 : pipe du package, erreurs au format d'API
 create(@ValidBody(createBookSchema) input: CreateBookInput): IBook {
   return this.books.create(input);
 }
 
+@Can("update", "book")
 @Patch(":id") // NestJS 12 : validation native (pipe global de AppModule)
 update(
   @Param("id") id: string,
@@ -80,21 +82,25 @@ export const nativeValidationPipe = new StandardSchemaValidationPipe({
 {/* snippet: apps/example-nest/src/app.module.ts#app-module */}
 
 ```ts title="src/app.module.ts"
+import { PermissionsModule } from "@etiennea20/adr-nest";
 import { Module } from "@nestjs/common";
-import { APP_GUARD, APP_PIPE } from "@nestjs/core";
+import { APP_PIPE } from "@nestjs/core";
 
-import { AuthGuard } from "./auth";
+import { memberSubject, permissions } from "./auth";
 import { BooksModule } from "./books";
 import { HealthController } from "./health";
+import { LoansModule } from "./loans";
 import { nativeValidationPipe } from "./validation";
 
 @Module({
-  imports: [BooksModule],
-  controllers: [HealthController],
-  providers: [
-    { provide: APP_GUARD, useClass: AuthGuard },
-    { provide: APP_PIPE, useValue: nativeValidationPipe },
+  imports: [
+    // Guard global à refus par défaut ; le démarrage échoue si une route n'est pas annotée.
+    PermissionsModule.forRoot({ permissions, subject: memberSubject }),
+    BooksModule,
+    LoansModule,
   ],
+  controllers: [HealthController],
+  providers: [{ provide: APP_PIPE, useValue: nativeValidationPipe }],
 })
 export class AppModule {}
 ```
