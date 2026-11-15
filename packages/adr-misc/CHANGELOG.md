@@ -1,5 +1,11 @@
 # @etiennea20/adr-misc
 
+## 0.3.0
+
+### Minor Changes
+
+- [#12](https://github.com/EtienneA20/adr-package/pull/12) [`a38219c`](https://github.com/EtienneA20/adr-package/commit/a38219c27d8395e279dde5e9614371c05ed56d33) Thanks [@EtienneA20](https://github.com/EtienneA20)! - Ajoute le sous-chemin `@etiennea20/adr-misc/contract` (zod ≥ 4 en peerDependency optionnelle) : contrat de liste partagé front / back (`defineListQuery` : filtre en arbre `and` / `or` / `not` sur liste blanche, recherche `q`, tri, pagination par pages, sélection de champs, limites configurables, encodage en paramètres d'URL avec `toListQuerySearchParams`), page de résultats (`pageSchema`) et format d'erreur d'API RFC 9457 (`apiErrorSchema`, `EApiErrorCode`). L'entrée principale ne dépend pas de zod.
+
 ## 0.2.1
 
 ### Patch Changes
