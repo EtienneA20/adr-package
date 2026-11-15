@@ -40,15 +40,36 @@ générée depuis le TSDoc.
   (`^0.2`), `rxjs` (`^7.8`). Les mêmes en devDependencies pour les tests.
 - Toute autre dépendance (par exemple une bibliothèque Excel pour la catégorie `export`) doit
   être demandée avant ajout, avec le choix dependency / peerDependency (optionnelle ?).
+- peerDependencies **optionnelles** (`peerDependenciesMeta`) : `@etiennea20/adr-misc`
+  (`>=0.3.0 <1.0.0`, contrat de liste) et `zod` (`^4.0.0`), réservées au sous-chemin `filtering`
+  (ESLint `optionalPeers`, zone `src/{filtering/**,**/*.test.ts}` : les tests peuvent aussi les
+  importer). L'entrée principale n'importe **ni** zod **ni** adr-misc.
+- Les mêmes en devDependencies, pour les tests (dont le test anti-divergence du format d'erreur).
+
+## Points d'entrée
+
+| Spécificateur                    | Source                   | Peers optionnels                       |
+| -------------------------------- | ------------------------ | -------------------------------------- |
+| `@etiennea20/adr-nest`           | `src/index.ts`           | aucun                                  |
+| `@etiennea20/adr-nest/filtering` | `src/filtering/index.ts` | `@etiennea20/adr-misc`, `zod`          |
+| `@etiennea20/adr-nest/prisma`    | `src/prisma/index.ts`    | aucun (n'importe pas `@prisma/client`) |
+
+- Ajouter un sous-chemin = modifier **ensemble** `exports` et `typesVersions` (package.json,
+  pour les projets en `moduleResolution: node`), `optionalPeers` (eslint.config.mjs), le
+  commentaire `@module` de son `index.ts`, `typedocPlugin("nest", […])` dans
+  `apps/docs/docusaurus.config.ts`, ce fichier et `SKILLS.md`. Demander avant d'en créer un.
+- Un adaptateur d'ORM produit des objets simples et n'importe pas l'ORM quand c'est possible
+  (aucune peerDependency) ; ses tests vérifient les arguments produits, sans base.
 
 ## Catégories
 
-| Dossier          | Contenu                                                            |
-| ---------------- | ------------------------------------------------------------------ |
-| `src/core/`      | Méthodes avancées NestJS : décorateurs, pipes, interceptors, utils |
-| `src/rights/`    | Gestion des droits : routes publiques, rôles, permissions, guards  |
-| `src/filtering/` | Filtrage avancé : parsing de query, critères, pagination, tri      |
-| `src/export/`    | Export Excel et JSON (services, interceptors, formats)             |
+| Dossier          | Contenu                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| `src/common/`    | Format d'erreur d'API, exceptions, validation, éléments transverses |
+| `src/rights/`    | Gestion des droits : routes publiques, rôles, permissions, guards   |
+| `src/filtering/` | Sous-chemin `./filtering` : requête de liste → critères neutres     |
+| `src/prisma/`    | Sous-chemin `./prisma` : critères → arguments Prisma (sans import)  |
+| `src/export/`    | Export Excel et JSON (services, interceptors, formats)              |
 
 Une catégorie n'est réexportée par `src/index.ts` qu'avec son premier élément. Si une catégorie
 dépasse une quinzaine d'éléments, proposer de la diviser.
@@ -60,6 +81,17 @@ dépasse une quinzaine d'éléments, proposer de la diviser.
 - Décorateurs exportés en `PascalCase` (`Public()`), comme ceux de NestJS.
 - Un module dynamique exposé suit la convention `forRoot` / `forRootAsync`.
 - Les messages d'erreur levés (exceptions HTTP comprises) sont en français.
+
+## Validation et erreurs
+
+- Validation par schéma **Standard Schema** (`IStandardSchema`, copie minimale de la
+  spécification) : aucun import de zod dans le code du package. `SchemaValidationPipe`,
+  `ValidBody`, `ValidQuery` fonctionnent sous NestJS 11 et 12 ; sous 12,
+  `apiValidationExceptionFactory` branche le pipe natif sur le même format.
+- Toute erreur exposée au client suit le format d'erreur d'API (`ApiException`, RFC 9457 +
+  `code`). `EApiErrorCode`, `IApiError` et `API_ERROR_CONTENT_TYPE` reproduisent ceux
+  d'`@etiennea20/adr-misc/contract` : `src/common/api-error/api-error.test.ts` vérifie qu'ils
+  restent identiques. Modifier les deux ensemble.
 
 ## Tests
 

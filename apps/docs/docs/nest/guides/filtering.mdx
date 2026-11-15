@@ -1,0 +1,163 @@
+---
+title: Filtrage, tri et pagination
+---
+
+# Filtrage, tri et pagination
+
+Le sous-chemin `@etiennea20/adr-nest/filtering` reçoit une requête de liste (filtre en arbre
+`and` / `or` / `not`, recherche `q`, tri, pagination par pages, sélection de champs), la valide
+avec le **contrat partagé avec le front** (`defineListQuery` de `@etiennea20/adr-misc/contract`)
+et la convertit en **critères neutres** (`IListCriteria`). Un adaptateur les traduit ensuite
+pour l'ORM : `@etiennea20/adr-nest/prisma` pour Prisma.
+
+```sh
+pnpm add @etiennea20/adr-misc zod
+```
+
+`@etiennea20/adr-misc` (≥ 0.3) et `zod` (≥ 4) sont des peerDependencies **optionnelles** :
+seules les applications qui utilisent `filtering` les installent.
+
+**Garanties** : seuls les champs déclarés dans le contrat sont filtrables, triables ou
+sélectionnables ; les limites (profondeur, nombre de conditions, taille de page…) sont vérifiées
+avant tout traitement ; aucun texte venant du client ne devient un nom de colonne ni du SQL.
+
+Les extraits viennent de l'[application d'exemple](./example-app). Le côté front (TanStack
+Router, appel d'API) est décrit dans le guide « Contrat de liste » d'adr-misc.
+
+## 1. Le contrat, partagé avec le front
+
+{/* snippet: apps/example-nest/src/books/book-list-query.ts#contract */}
+
+```ts title="src/books/book-list-query.ts"
+import { defineListQuery } from "@etiennea20/adr-misc/contract";
+
+// Contrat de la liste des livres, partagé avec le front (TanStack Router `validateSearch`,
+// appel d'API) : liste blanche des champs et de ce que le client peut en faire.
+export const bookListQuery = defineListQuery({
+  fields: {
+    id: { type: "uuid", filter: ["eq", "in"], select: true },
+    title: { type: "string", filter: true, sort: true, select: true, search: true },
+    authorName: { type: "string", filter: ["eq", "contains"], sort: true, search: true },
+    status: { type: "enum", values: ["available", "loaned"], filter: true, select: true },
+    publishedAt: { type: "date", filter: true, sort: true, select: true },
+  },
+  defaults: { sort: [{ field: "title", direction: "asc" }], pageSize: 20 },
+});
+```
+
+## 2. Les routes de liste
+
+`@ListQuery(contrat)` valide la requête et fournit les critères. En `GET`, chaque clé est un
+paramètre d'URL encodé en JSON (convention de TanStack Router) ; `source: "body"` lit le même
+contrat dans le corps d'un `POST`.
+
+{/* snippet: apps/example-nest/src/books/books.controller.ts#list-routes */}
+
+```ts title="src/books/books.controller.ts"
+@Public() // le catalogue est consultable sans compte
+@Get() // GET /livres?filter=…&sort=…&page=2 (un paramètre par clé, en JSON)
+list(@ListQuery(bookListQuery) criteria: IListCriteria): IPage<IBook> {
+  return this.books.findPage(criteria);
+}
+
+@Public()
+@Post("search") // même contrat dans le corps, pour les filtres trop longs pour une URL
+search(@ListQuery(bookListQuery, { source: "body" }) criteria: IListCriteria): IPage<IBook> {
+  return this.books.findPage(criteria);
+}
+```
+
+Une requête invalide n'atteint pas la route : réponse 400 au
+[format d'erreur d'API](./validation), code `INVALID_QUERY` (champ non autorisé, valeur
+invalide…) ou `QUERY_LIMIT_EXCEEDED` (limite du contrat dépassée), avec le chemin de chaque
+problème (`filter.or.1.value`).
+
+## 3. Exécuter les critères
+
+### En mémoire
+
+Pour une petite liste (référentiel, démonstration, tests), `applyCriteriaInMemory` filtre, trie,
+pagine et compte un tableau, avec la même sémantique que les adaptateurs :
+
+{/* snippet: apps/example-nest/src/books/books.service.ts#find-page */}
+
+```ts title="src/books/books.service.ts"
+findPage(criteria: IListCriteria): IPage<IBook> {
+  // Dépôt en mémoire : mêmes critères que l'adaptateur Prisma (voir prisma-books.repository.ts).
+  return applyCriteriaInMemory(this.repository.findAll(), criteria);
+}
+```
+
+### Avec Prisma
+
+`toPrismaFindArgs` produit les arguments `findMany` (`where`, `orderBy`, `select`, `skip`,
+`take`) ; `toPage` construit la réponse. Le package n'importe pas `@prisma/client` : il produit
+des objets simples, à passer au client généré.
+
+{/* snippet: apps/example-nest/src/books/prisma-books.repository.ts#prisma */}
+
+```ts title="src/books/prisma-books.repository.ts"
+import type { IPage } from "@etiennea20/adr-misc/contract";
+import { type IListCriteria, toPage } from "@etiennea20/adr-nest/filtering";
+import { toPrismaFindArgs } from "@etiennea20/adr-nest/prisma";
+
+// Ligne lue par Prisma (modèle `Book` avec une relation `author`).
+export interface IBookRow {
+  id: string;
+  title: string;
+  author: { name: string };
+}
+
+// Partie du client Prisma utilisée ici : en vrai, `prisma.book` (type `Prisma.BookDelegate`).
+export interface IBookDelegate {
+  findMany(args: object): Promise<IBookRow[]>;
+  count(args: object): Promise<number>;
+}
+
+export class PrismaBooksRepository {
+  constructor(private readonly books: IBookDelegate) {}
+
+  // À appeler avec les critères de `@ListQuery(bookListQuery, { columns: { authorName: "author.name" } })`.
+  async findPage(criteria: IListCriteria): Promise<IPage<IBookRow>> {
+    const args = toPrismaFindArgs(criteria);
+    const [rows, total] = await Promise.all([
+      this.books.findMany(args),
+      criteria.withTotal ? this.books.count({ where: args.where }) : undefined,
+    ]);
+    return toPage(rows, criteria, total);
+  }
+}
+```
+
+- **Colonnes** : les noms du contrat sont publics ; le serveur les associe à ses colonnes,
+  relations comprises : `@ListQuery(bookListQuery, { columns: { authorName: "author.name" } })`.
+  Une colonne invalide lève `ListQueryConfigError` au démarrage.
+- **Relations** : « vers un » uniquement (`author.name`). Pour une relation « vers plusieurs »,
+  écrire une condition serveur (`some`, `every`).
+- **Texte** : `contains`, `startsWith`, `endsWith` sont insensibles à la casse
+  (`mode: "insensitive"`, PostgreSQL) sauf `caseSensitive: true` dans la condition.
+- **Page suivante** : `criteria.take` vaut `pageSize + 1` ; `toPage` retire la ligne en plus et
+  renseigne `hasNextPage`, même sans comptage (`withTotal: false`).
+
+## 4. Restreindre une liste côté serveur
+
+`andCriteria` ajoute une condition de confiance (périmètre de droits, état imposé) au filtre du
+client. Elle n'est pas soumise à la liste blanche : elle vient du code serveur et utilise des
+chemins de colonnes.
+
+```ts
+import { andCriteria } from "@etiennea20/adr-nest/filtering";
+
+const visible = andCriteria(criteria, {
+  path: "deletedAt",
+  op: "isNull",
+  value: true,
+  caseSensitive: false,
+});
+```
+
+## Hors d'une route
+
+`parseListQuery(contrat, entrée, options)` fait la même validation et la même conversion pour une
+entrée qui ne vient pas d'un paramètre de route (message de file, WebSocket) ;
+`toListCriteria` convertit une requête déjà validée.

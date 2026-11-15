@@ -1,0 +1,165 @@
+---
+title: Validation et erreurs d'API
+---
+
+# Validation et erreurs d'API
+
+adr-nest valide les entrées avec des schémas **Standard Schema** (zod 4 en pratique) : le
+schéma est la source de vérité du type, sans classe DTO ni `class-validator`. Toute erreur de
+validation suit le **format d'erreur d'API** commun au front et au back : RFC 9457 (Problem
+Details) étendue par un `code` stable et le détail par champ.
+
+Les extraits viennent de l'[application d'exemple](./example-app).
+
+## 1. Déclarer les schémas
+
+{/* snippet: apps/example-nest/src/books/book.schemas.ts#schemas */}
+
+```ts title="src/books/book.schemas.ts"
+import { z } from "zod";
+
+// Le schéma est la source de vérité : il valide l'entrée et donne son type (pas de classe DTO).
+export const createBookSchema = z.object({
+  title: z.string().trim().min(1, "Le titre est obligatoire.").max(200),
+  authorName: z.string().trim().min(1, "L'auteur est obligatoire."),
+  publishedAt: z.iso.date("Date attendue au format AAAA-MM-JJ."),
+});
+export type CreateBookInput = z.output<typeof createBookSchema>;
+
+export const updateBookSchema = createBookSchema
+  .partial()
+  .extend({ status: z.enum(["available", "loaned"]).optional() });
+export type UpdateBookInput = z.output<typeof updateBookSchema>;
+```
+
+Ces schémas peuvent vivre dans le code partagé avec le front : le formulaire react-hook-form
+valide alors avec exactement les mêmes règles (`zodResolver(createBookSchema)`).
+
+## 2. Valider un paramètre
+
+Deux façons, selon la version de NestJS :
+
+- **`ValidBody` / `ValidQuery`** (NestJS 11 et 12) : décorateurs du package, raccourcis de
+  `@Body(new SchemaValidationPipe(schema))`.
+- **Validation native de NestJS 12** : `@Body({ schema })`, validé par le
+  `StandardSchemaValidationPipe` de NestJS, configuré avec `apiValidationExceptionFactory` pour
+  que ses erreurs suivent le même format.
+
+{/* snippet: apps/example-nest/src/books/books.controller.ts#validation */}
+
+```ts title="src/books/books.controller.ts"
+@Post() // NestJS 11 et 12 : pipe du package, erreurs au format d'API
+create(@ValidBody(createBookSchema) input: CreateBookInput): IBook {
+  return this.books.create(input);
+}
+
+@Patch(":id") // NestJS 12 : validation native (pipe global de AppModule)
+update(
+  @Param("id") id: string,
+  @Body({ schema: updateBookSchema }) input: UpdateBookInput,
+): IBook {
+  return this.books.update(id, input);
+}
+```
+
+Le pipe natif est enregistré une fois pour toute l'application :
+
+{/* snippet: apps/example-nest/src/validation/native-validation.pipe.ts#native-validation */}
+
+```ts title="src/validation/native-validation.pipe.ts"
+import { apiValidationExceptionFactory } from "@etiennea20/adr-nest";
+import { StandardSchemaValidationPipe } from "@nestjs/common";
+
+// NestJS 12 : valide les paramètres déclarés avec un schéma (`@Body({ schema })`) et renvoie
+// les erreurs au format d'API (400, `VALIDATION_FAILED`, détail par champ).
+export const nativeValidationPipe = new StandardSchemaValidationPipe({
+  exceptionFactory: apiValidationExceptionFactory,
+});
+```
+
+{/* snippet: apps/example-nest/src/app.module.ts#app-module */}
+
+```ts title="src/app.module.ts"
+import { Module } from "@nestjs/common";
+import { APP_GUARD, APP_PIPE } from "@nestjs/core";
+
+import { AuthGuard } from "./auth";
+import { BooksModule } from "./books";
+import { HealthController } from "./health";
+import { nativeValidationPipe } from "./validation";
+
+@Module({
+  imports: [BooksModule],
+  controllers: [HealthController],
+  providers: [
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_PIPE, useValue: nativeValidationPipe },
+  ],
+})
+export class AppModule {}
+```
+
+Dans les deux cas, la valeur reçue par la méthode est celle **produite par le schéma** : textes
+nettoyés (`trim`), valeurs par défaut appliquées, clés inconnues retirées.
+
+## 3. La réponse en cas d'erreur
+
+`POST /livres` avec `{ "title": " ", "publishedAt": "01/05/1885" }` répond :
+
+```json
+{
+  "type": "about:blank",
+  "title": "Données invalides",
+  "status": 400,
+  "code": "VALIDATION_FAILED",
+  "errors": [
+    { "path": "title", "message": "Le titre est obligatoire.", "code": "too_small" },
+    {
+      "path": "authorName",
+      "message": "Invalid input: expected string, received undefined",
+      "code": "invalid_type"
+    },
+    {
+      "path": "publishedAt",
+      "message": "Date attendue au format AAAA-MM-JJ.",
+      "code": "invalid_format"
+    }
+  ]
+}
+```
+
+- `path` est en notation pointée (`items.0.title`) : le front le passe tel quel à `setError`
+  de react-hook-form (voir le guide « Contrat de liste » d'adr-misc, `apiErrorSchema`).
+- Les messages génériques de zod suivent sa locale : `z.config(z.locales.fr())` au démarrage
+  de l'application les met en français. Les messages écrits dans le schéma sont repris tels
+  quels.
+- `ValidationException` accepte un autre code, titre ou statut (`422`) :
+  `@ValidQuery(schema, { code: "INVALID_QUERY" })`.
+
+## 4. Lever une erreur métier au même format
+
+`ApiException` produit le même corps pour une erreur métier, que le front reconnaît par son
+code :
+
+```ts
+import { ApiException } from "@etiennea20/adr-nest";
+
+throw new ApiException({
+  status: 409,
+  code: "LOAN_LIMIT_REACHED",
+  title: "Nombre maximal d'emprunts atteint",
+  detail: "Un adhérent ne peut pas emprunter plus de 5 livres.",
+});
+```
+
+Les codes communs sont dans `EApiErrorCode` (mêmes valeurs que dans
+`@etiennea20/adr-misc/contract`). Sans configuration, NestJS renvoie déjà ce corps avec le bon
+statut ; le filtre d'exceptions d'adr-nest (à venir) ajoutera `instance`, `requestId` et
+l'en-tête `application/problem+json`.
+
+## Pourquoi pas nestjs-zod ?
+
+nestjs-zod (5.6) n'est pas compatible avec NestJS 12 (peerDependency `@nestjs/common` 10 ou
+11), et son intérêt principal (classes DTO pour Swagger) n'est pas utile ici. Le pipe
+d'adr-nest accepte tout schéma Standard Schema et produit le format d'erreur commun ; pour
+une documentation OpenAPI, `z.toJSONSchema()` reste disponible.
