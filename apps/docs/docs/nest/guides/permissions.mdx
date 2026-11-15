@@ -1,0 +1,213 @@
+---
+title: Permissions et routes publiques
+---
+
+# Permissions et routes publiques
+
+`PermissionsModule` protège toute l'application avec un guard global **à refus par défaut** :
+chaque route doit dire qui peut l'appeler.
+
+| Annotation                | Accès                                              | Sans sujet | Sujet sans droit |
+| ------------------------- | -------------------------------------------------- | ---------- | ---------------- |
+| `@Public()`               | tout le monde                                      | accepté    | accepté          |
+| `@Authenticated()`        | tout sujet authentifié, quels que soient ses rôles | 401        | accepté          |
+| `@Can(action, ressource)` | sujet dont un rôle a une règle sur l'action        | 401        | 403              |
+| aucune                    | personne (et, en mode strict, le démarrage échoue) | 401        | 403              |
+
+Les erreurs suivent le [format d'erreur d'API](./validation) (`UNAUTHENTICATED`, `FORBIDDEN`) ;
+une 403 ne révèle jamais la règle manquante. L'annotation d'une méthode l'emporte sur celle de
+son contrôleur.
+
+Les extraits viennent de l'[application d'exemple](./example-app).
+
+## 1. Écrire les règles
+
+Les règles sont des **données** (aucune fonction) : un rôle reçoit des règles
+`{ action, resource, where }`. Elles sont validées au démarrage et pourront être envoyées
+telles quelles au front pour masquer les boutons.
+
+{/* snippet: apps/example-nest/src/auth/permissions.ts#permissions */}
+
+```ts title="src/auth/permissions.ts"
+// Règles sérialisables (aucune fonction) : elles pourront être envoyées telles quelles au front.
+export const permissions = definePermissions({
+  roles: {
+    // Le bibliothécaire gère tout : livres, emprunts, exports.
+    librarian: [{ action: "manage", resource: "all" }],
+    // L'adhérent consulte ses emprunts et n'annule que ceux qui sont en cours.
+    member: [
+      { action: "read", resource: "loan", where: { memberId: "$subject.id" } },
+      { action: "cancel", resource: "loan", where: { memberId: "$subject.id", status: "active" } },
+    ],
+  },
+});
+```
+
+- **Jokers** : l'action `manage` vaut toutes les actions, la ressource `all` toutes les
+  ressources.
+- **Conditions `where`** : champ de la ressource → valeur, combinées en ET. Une valeur simple
+  donne une égalité, une liste une appartenance (`status: ["active", "late"]`).
+- **Références au sujet** : `"$subject.id"`, `"$subject.libraryIds"` (une liste donne une
+  appartenance). Une référence absente du sujet n'accorde rien : en cas de doute, la règle
+  refuse.
+- **Erreurs de règle** : une propriété inconnue (`wher`), une action vide ou une référence mal
+  écrite (`"$subjet.id"`) lèvent `PermissionsConfigError` au démarrage, avec l'emplacement.
+
+## 2. Fournir le sujet
+
+Le **sujet** est l'utilisateur de la requête, avec ses rôles. Par défaut, le module lit
+`request.user` (convention Passport). La fonction `subject` l'adapte à l'authentification de
+l'application ; elle peut être asynchrone.
+
+{/* snippet: apps/example-nest/src/auth/member-subject.ts#subject */}
+
+```ts title="src/auth/member-subject.ts"
+// Charge utile du jeton, posée dans `request.user` par l'authentification (Passport, JWT…).
+interface ITokenPayload {
+  readonly sub: string;
+  readonly roles?: readonly string[];
+}
+
+// Point d'extension : traduit l'utilisateur authentifié en sujet des permissions.
+export const memberSubject: SubjectResolver = (context) => {
+  const user = context.switchToHttp().getRequest<{ user?: ITokenPayload }>().user;
+  if (!user) return null; // requête anonyme : 401 sur les routes protégées
+  const member: IMember = { id: user.sub, roles: user.roles ?? [] };
+  return member;
+};
+```
+
+## 3. Importer le module
+
+{/* snippet: apps/example-nest/src/app.module.ts#app-module */}
+
+```ts title="src/app.module.ts"
+import { PermissionsModule } from "@etiennea20/adr-nest";
+import { Module } from "@nestjs/common";
+import { APP_PIPE } from "@nestjs/core";
+
+import { memberSubject, permissions } from "./auth";
+import { BooksModule } from "./books";
+import { HealthController } from "./health";
+import { LoansModule } from "./loans";
+import { nativeValidationPipe } from "./validation";
+
+@Module({
+  imports: [
+    // Guard global à refus par défaut ; le démarrage échoue si une route n'est pas annotée.
+    PermissionsModule.forRoot({ permissions, subject: memberSubject }),
+    BooksModule,
+    LoansModule,
+  ],
+  controllers: [HealthController],
+  providers: [{ provide: APP_PIPE, useValue: nativeValidationPipe }],
+})
+export class AppModule {}
+```
+
+- **Mode strict** (par défaut) : au démarrage, le module liste les routes sans annotation et
+  les `@Can()` qui ne correspondent à aucune règle (faute de frappe), et refuse de démarrer.
+  `strict: false` le désactive.
+- **Règles chargées d'une configuration** : `PermissionsModule.forRootAsync({ imports, inject,
+useFactory })`.
+- **Guard d'authentification global existant** : `globalGuard: false`, puis enregistrer
+  `PermissionsGuard` après lui (`{ provide: APP_GUARD, useClass: PermissionsGuard }`).
+
+## 4. Annoter les routes
+
+{/* snippet: apps/example-nest/src/loans/loans.controller.ts#loan-routes */}
+
+```ts title="src/loans/loans.controller.ts"
+@Controller("emprunts")
+export class LoansController {
+  constructor(private readonly loans: LoansService) {}
+
+  @Can("read", "loan") // le guard vérifie le type de ressource, le service restreint la liste
+  @Get()
+  list(
+    @CurrentSubject() member: IMember,
+    @ListQuery(loanListQuery) criteria: IListCriteria,
+  ): IPage<ILoan> {
+    return this.loans.findPage(member, criteria);
+  }
+
+  @Can("cancel", "loan") // le service vérifie ensuite l'emprunt précis
+  @Post(":id/annulation")
+  cancel(@CurrentSubject() member: IMember, @Param("id") id: string): ILoan {
+    return this.loans.cancel(member, id);
+  }
+}
+```
+
+`@CurrentSubject()` injecte le sujet résolu par le guard (`null` sur une route publique
+appelée sans authentification).
+
+Décorer la classe applique l'annotation à toutes ses routes :
+
+{/* snippet: apps/example-nest/src/health/health.controller.ts#public-controller */}
+
+```ts title="src/health/health.controller.ts"
+@Public() // toutes les routes du contrôleur sont publiques
+@Controller("health")
+export class HealthController {
+  @Get()
+  check(): { status: "ok" } {
+    return { status: "ok" };
+  }
+}
+```
+
+## 5. Vérifier une ressource précise
+
+Le guard ne connaît que le type de ressource : il ne peut pas savoir à qui appartient
+l'emprunt n° 2. Les conditions `where` se vérifient dans le service, une fois la ressource
+chargée :
+
+{/* snippet: apps/example-nest/src/loans/loans.service.ts#assert-can */}
+
+```ts title="src/loans/loans.service.ts"
+cancel(member: IMember, id: string): ILoan {
+  const loan = this.repository.findById(id);
+  if (!loan) throw new NotFoundException(`Emprunt « ${id} » introuvable.`);
+  // 403 si l'emprunt est celui d'un autre adhérent ou n'est plus en cours.
+  this.permissions.assertCan(member, "cancel", "loan", loan);
+  return this.repository.updateStatus(id, "cancelled") ?? loan;
+}
+```
+
+## 6. Restreindre une liste
+
+`scope` traduit les règles du sujet en conditions de filtre, à combiner avec la requête du
+client grâce à `andCriteria` (voir [filtrage](./filtering)) : la base ne renvoie que les
+lignes autorisées, pagination et total compris.
+
+{/* snippet: apps/example-nest/src/loans/loans.service.ts#scope */}
+
+```ts title="src/loans/loans.service.ts"
+findPage(member: IMember, criteria: IListCriteria): IPage<ILoan> {
+  // Périmètre issu des règles : ses emprunts pour un adhérent, tous pour un bibliothécaire.
+  // Avec Prisma, `toPrismaFindArgs` traduit le même arbre en `where`.
+  const scoped = andCriteria(criteria, this.permissions.scope(member, "read", "loan"));
+  return applyCriteriaInMemory(this.repository.findAll(), scoped);
+}
+```
+
+| Règles du sujet                      | `scope(…)`                                            |
+| ------------------------------------ | ----------------------------------------------------- |
+| une règle sans `where`               | `{ and: [] }` : aucune restriction                    |
+| `where: { memberId: "$subject.id" }` | `{ path: "memberId", op: "eq", value: "adherent-1" }` |
+| plusieurs règles                     | `{ or: [ … ] }`                                       |
+| aucune règle                         | `{ or: [] }` : aucune ligne                           |
+
+## Tester sans base de données
+
+`new PermissionsService({ permissions })` suffit pour tester les règles ; les tests de
+l'exemple vérifient aussi chaque route avec `PermissionsGuard` et un sujet factice
+(`src/auth/permissions.test.ts`).
+
+## Plus tard
+
+- **Multi-tenant** : le sujet est extensible ; une condition `tenantId: "$subject.tenantId"`
+  fonctionne déjà, et un réglage global viendra sans changement cassant.
+- **Partage avec le front** : envoyer `PermissionsService.definition` au client, pour masquer
+  les actions interdites avec les mêmes règles.

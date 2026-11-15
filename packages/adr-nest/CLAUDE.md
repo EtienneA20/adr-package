@@ -67,14 +67,14 @@ générée depuis le TSDoc.
 
 ## Catégories
 
-| Dossier          | Contenu                                                               |
-| ---------------- | --------------------------------------------------------------------- |
-| `src/common/`    | Format d'erreur d'API, exceptions, validation, éléments transverses   |
-| `src/rights/`    | Gestion des droits : routes publiques, rôles, permissions, guards     |
-| `src/filtering/` | Sous-chemin `./filtering` : requête de liste → critères neutres       |
-| `src/prisma/`    | Sous-chemin `./prisma` : critères → arguments Prisma (sans import)    |
-| `src/export/`    | Sous-chemin `./export` : JSON, NDJSON, CSV, réponse de téléchargement |
-| `src/excel/`     | Sous-chemin `./excel` : XLSX en flux (writer interne sur fflate)      |
+| Dossier            | Contenu                                                               |
+| ------------------ | --------------------------------------------------------------------- |
+| `src/common/`      | Format d'erreur d'API, exceptions, validation, éléments transverses   |
+| `src/permissions/` | Permissions : refus par défaut, règles sérialisables, guard, module   |
+| `src/filtering/`   | Sous-chemin `./filtering` : requête de liste → critères neutres       |
+| `src/prisma/`      | Sous-chemin `./prisma` : critères → arguments Prisma (sans import)    |
+| `src/export/`      | Sous-chemin `./export` : JSON, NDJSON, CSV, réponse de téléchargement |
+| `src/excel/`       | Sous-chemin `./excel` : XLSX en flux (writer interne sur fflate)      |
 
 Une catégorie n'est réexportée par `src/index.ts` qu'avec son premier élément. Si une catégorie
 dépasse une quinzaine d'éléments, proposer de la diviser.
@@ -114,5 +114,19 @@ expose un jour des DTO validés.
 
 ## Élément de référence
 
-`src/rights/public/` : modèle à suivre (décorateur + constante exportés, TSDoc complet, test
+`src/permissions/public/` : modèle à suivre (décorateur + constante exportés, TSDoc complet, test
 d'intégration avec `Test.createTestingModule` et `Reflector`).
+
+## Permissions
+
+- **Refus par défaut** : `PermissionsGuard` (global via `PermissionsModule`) refuse toute route
+  sans `@Public()`, `@Authenticated()` ou `@Can()` ; le mode strict (par défaut) fait échouer
+  le démarrage en listant ces routes. Toute nouvelle route d'exemple doit être annotée.
+- **Règles = données sérialisables** (`IPermissionsDefinition`) : jamais de fonction dans une
+  règle, pour pouvoir les partager avec le front. `where` : égalité ou appartenance, valeurs
+  fixes ou références `$subject.<chemin>`. Toute extension du format (opérateurs, nouveaux
+  jokers) se décide d'abord : c'est un contrat partagé.
+- **Échec fermé** : sujet absent, rôles mal typés, référence absente du sujet → pas de droit.
+  Tout nouveau cas d'évaluation est testé dans les deux sens (accordé, refusé).
+- `PermissionScope` reste compatible avec `CriteriaNode` (test de types dans
+  `permission-scope.test.ts`) sans que l'entrée principale importe le filtrage.

@@ -1,7 +1,7 @@
 import { defineAdrConfig } from "@etiennea20/config/eslint";
 
 // PeerDependencies optionnelles : chacune réservée aux sous-chemins qui l'utilisent (les tests
-// peuvent toutes les importer). L'entrée principale (common, rights) n'en importe aucune ;
+// peuvent toutes les importer). L'entrée principale (common, permissions) n'en importe aucune ;
 // `prisma` n'importe que des types, via `../../filtering`.
 export default defineAdrConfig({
   tsconfigRootDir: import.meta.dirname,

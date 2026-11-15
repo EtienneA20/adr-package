@@ -14,23 +14,21 @@ description: >-
 Utilitaires pour applications NestJS (11 ou 12), compilés en CommonJS avec les métadonnées de
 décorateurs (`emitDecoratorMetadata`).
 
-- Points d'entrée : `@etiennea20/adr-nest` (common, rights), `@etiennea20/adr-nest/filtering`
+- Points d'entrée : `@etiennea20/adr-nest` (common, permissions), `@etiennea20/adr-nest/filtering`
   (exige `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4, peerDependencies optionnelles),
   `@etiennea20/adr-nest/prisma` (aucune dépendance), `@etiennea20/adr-nest/export` (exige
   `@etiennea20/adr-misc`) et `@etiennea20/adr-nest/excel` (exige `@etiennea20/adr-misc` et
   `fflate` ≥ 0.8).
 - peerDependencies : `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs`.
 - Catégories : `common` (format d'erreur d'API, exceptions, validation, éléments
-  transverses), `rights` (gestion des droits), `filtering` (requêtes de liste, sous-chemin),
+  transverses), `permissions` (permissions à refus par défaut), `filtering` (requêtes de liste, sous-chemin),
   `prisma` (adaptateur, sous-chemin), `export` (JSON, NDJSON, CSV, sous-chemin), `excel` (XLSX,
   sous-chemin).
 
 ## Table des matières
 
 - [common](#common) : format d'erreur d'API, exceptions et validation (`API_ERROR_CONTENT_TYPE`, `ApiException`, `apiValidationExceptionFactory`, `EApiErrorCode`, `IApiError`, `IApiErrorIssue`, `IApiExceptionOptions`, `InferSchemaOutput`, `IStandardSchema`, `IStandardSchemaIssue`, `IValidationExceptionOptions`, `SchemaValidationPipe`, `StandardSchemaResult`, `ValidationException`, `ValidBody`, `ValidQuery`)
-- [rights](#rights) : gestion des droits
-  - [`Public`](#public)
-  - [`IS_PUBLIC_KEY`](#is_public_key)
+- [permissions](#permissions) : permissions à refus par défaut, règles sérialisables (`Authenticated`, `Can`, `CurrentSubject`, `definePermissions`, `IPermissionCondition`, `IPermissionRule`, `IPermissionsDefinition`, `IPermissionsModuleOptions`, `IPermissionSubject`, `IS_PUBLIC_KEY`, `PermissionConditionValue`, `PermissionDeniedException`, `PermissionScope`, `PermissionsConfigError`, `PermissionsGuard`, `PermissionsModule`, `PermissionsService`, `Public`, `SubjectResolver`, `UnauthenticatedException`)
 - [filtering](#filtering) : requêtes de liste et critères, sous-chemin `/filtering` (`andCriteria`, `applyCriteriaInMemory`, `CriteriaNode`, `CriteriaValue`, `ICriteriaCondition`, `ICriteriaOrder`, `IListCriteria`, `IListCriteriaOptions`, `IListQueryParamOptions`, `ListQuery`, `ListQueryConfigError`, `parseListQuery`, `toListCriteria`, `toPage`)
 - [prisma](#prisma) : adaptateur Prisma, sous-chemin `/prisma` (`IPrismaFindArgs`, `toPrismaFindArgs`, `toPrismaWhere`)
 - [export](#export) : exports JSON, NDJSON, CSV et réponse de téléchargement, sous-chemin `/export` (`assertExportSize`, `contentDisposition`, `createExportFile`, `DEFAULT_EXPORT_MAX_ROWS`, `defineExportColumns`, `EExportColumnType`, `EExportFormat`, `EXPORT_CONTENT_TYPES`, `ExportCellValue`, `ExportConfigError`, `ExportHeaders`, `ExportLimitExceededException`, `ICsvExportOptions`, `IExportColumn`, `IExportFileOptions`, `IExportOptions`, `limitExportRows`, `readExportCell`, `selectExportColumns`, `toCsvExport`, `toJsonExport`, `toNdjsonExport`)
@@ -646,6 +644,747 @@ type InferSchemaOutput<S extends IStandardSchema> = NonNullable<S["~standard"]["
 import type { InferSchemaOutput } from "@etiennea20/adr-nest";
 
 type CreateBookInput = InferSchemaOutput<typeof createBookSchema>;
+```
+
+## permissions
+
+Permissions **à refus par défaut** : chaque route est annotée `@Public()`, `@Authenticated()` ou `@Can(action, ressource)`. Les règles sont des **données sérialisables** (rôle → `{ action, resource, where }`), validées au démarrage ; `where` n'accepte que des égalités et des appartenances, avec des références au sujet (`"$subject.id"`). Trois niveaux de contrôle : la route (guard), une ressource chargée (`assertCan`) et une liste (`scope`, combiné avec `andCriteria`). Jokers : action `manage`, ressource `all`. Aucune dépendance au-delà des peerDependencies NestJS.
+
+### `PermissionsModule`
+
+| Champ          | Valeur                                                          |
+| -------------- | --------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                   |
+| Point d'entrée | `@etiennea20/adr-nest`                                          |
+| Statut         | stable                                                          |
+| Depuis         | 0.2.0                                                           |
+| Source         | `src/permissions/permissions-module/permissions-module.ts`      |
+| Tests          | `src/permissions/permissions-module/permissions-module.test.ts` |
+
+**Signature**
+
+```ts
+class PermissionsModule {
+  static forRoot(options: IPermissionsModuleOptions & { globalGuard?: boolean }): DynamicModule;
+  static forRootAsync(
+    options: ConfigurableModuleAsyncOptions<IPermissionsModuleOptions> & {
+      globalGuard?: boolean;
+    },
+  ): DynamicModule;
+}
+```
+
+**Description** : module **global** des permissions : valide les règles, enregistre `PermissionsGuard` comme guard global (`globalGuard`, `true` par défaut ; `false` pour l'enregistrer soi-même après un guard d'authentification global) et rend `PermissionsService` injectable partout. En mode strict (`strict`, `true` par défaut), le démarrage (`onApplicationBootstrap`) échoue en listant les routes sans annotation et les `@Can()` qui ne correspondent à aucune règle. `forRootAsync` accepte `imports`, `inject`, `useFactory` (ou `useClass`, `useExisting`), pour des règles chargées d'une configuration.
+
+**Paramètres**
+
+- `options.permissions` : règles par rôle.
+- `options.subject` : fonction qui fournit le sujet (`request.user` par défaut).
+- `options.strict` : contrôle des routes au démarrage (`true` par défaut).
+- `options.globalGuard` : enregistrer le guard global (`true` par défaut).
+
+**Retour** : un module dynamique NestJS.
+
+**Erreurs** : `PermissionsConfigError` au démarrage : règles invalides ; en mode strict, route non annotée ou `@Can()` sans règle.
+
+**Exemple**
+
+```ts
+import { PermissionsModule } from "@etiennea20/adr-nest";
+
+@Module({
+  imports: [PermissionsModule.forRoot({ permissions, subject: memberSubject }), LoansModule],
+})
+export class AppModule {}
+```
+
+### `IPermissionsModuleOptions`
+
+| Champ          | Valeur                                                            |
+| -------------- | ----------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                     |
+| Point d'entrée | `@etiennea20/adr-nest`                                            |
+| Statut         | stable                                                            |
+| Depuis         | 0.2.0                                                             |
+| Source         | `src/permissions/permissions-options/permissions-options.ts`      |
+| Tests          | `src/permissions/permissions-options/permissions-options.test.ts` |
+
+**Signature**
+
+```ts
+interface IPermissionsModuleOptions {
+  readonly permissions: IPermissionsDefinition;
+  readonly subject?: SubjectResolver | undefined;
+  readonly strict?: boolean | undefined;
+}
+```
+
+**Description** : options de `PermissionsModule.forRoot` (ou renvoyées par la fabrique de `forRootAsync`) : règles, fonction de résolution du sujet, mode strict.
+
+**Exemple**
+
+```ts
+import type { IPermissionsModuleOptions } from "@etiennea20/adr-nest";
+
+const options: IPermissionsModuleOptions = { permissions, strict: true };
+```
+
+### `SubjectResolver`
+
+| Champ          | Valeur                                                            |
+| -------------- | ----------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                     |
+| Point d'entrée | `@etiennea20/adr-nest`                                            |
+| Statut         | stable                                                            |
+| Depuis         | 0.2.0                                                             |
+| Source         | `src/permissions/permissions-options/permissions-options.ts`      |
+| Tests          | `src/permissions/permissions-options/permissions-options.test.ts` |
+
+**Signature**
+
+```ts
+type SubjectResolver = (
+  context: ExecutionContext,
+) => IPermissionSubject | null | undefined | Promise<IPermissionSubject | null | undefined>;
+```
+
+**Description** : point d'extension de l'authentification : fournit le sujet d'une requête, `null` si elle est anonyme. Peut être asynchrone (lecture d'un jeton, chargement des rôles) et lever une exception (jeton invalide). Par défaut : `request.user` (convention Passport). Appelée sur toutes les routes, publiques comprises.
+
+**Exemple**
+
+```ts
+import type { SubjectResolver } from "@etiennea20/adr-nest";
+
+export const memberSubject: SubjectResolver = (context) => {
+  const user = context.switchToHttp().getRequest<{ user?: ITokenPayload }>().user;
+  return user ? { id: user.sub, roles: user.roles ?? [] } : null;
+};
+```
+
+### `definePermissions`
+
+| Champ          | Valeur                                                          |
+| -------------- | --------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                   |
+| Point d'entrée | `@etiennea20/adr-nest`                                          |
+| Statut         | stable                                                          |
+| Depuis         | 0.2.0                                                           |
+| Source         | `src/permissions/define-permissions/define-permissions.ts`      |
+| Tests          | `src/permissions/define-permissions/define-permissions.test.ts` |
+
+**Signature**
+
+```ts
+function definePermissions(definition: IPermissionsDefinition): IPermissionsDefinition;
+```
+
+**Description** : valide une définition de permissions (dans le code ou chargée d'un JSON) et en renvoie une copie figée en profondeur. Refuse : propriété de règle inconnue, action ou ressource vide, chemin de champ invalide (`__proto__`…), valeur non sérialisable, liste vide ou imbriquée, chaîne commençant par `$` qui n'est pas une référence `$subject.<chemin>`. Tous les problèmes sont listés avec leur emplacement.
+
+**Paramètres**
+
+- `definition` : règles par rôle.
+
+**Retour** : une copie validée et figée de la définition.
+
+**Erreurs** : `PermissionsConfigError` si une règle est invalide.
+
+**Exemple**
+
+```ts
+import { definePermissions } from "@etiennea20/adr-nest";
+
+export const permissions = definePermissions({
+  roles: {
+    librarian: [{ action: "manage", resource: "all" }],
+    member: [
+      { action: "read", resource: "loan", where: { memberId: "$subject.id" } },
+      { action: "cancel", resource: "loan", where: { memberId: "$subject.id", status: "active" } },
+    ],
+  },
+});
+```
+
+### `IPermissionsDefinition`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `permissions`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                                    |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/permissions/permission-rule/permission-rule.ts`      |
+| Tests          | `src/permissions/permission-rule/permission-rule.test.ts` |
+
+**Signature**
+
+```ts
+interface IPermissionsDefinition {
+  readonly roles: Readonly<Record<string, readonly IPermissionRule[]>>;
+}
+```
+
+**Description** : définition des permissions : règles accordées à chaque rôle, sérialisables (aucune fonction). Tout ce qui n'est pas accordé est refusé.
+
+**Exemple**
+
+```ts
+import type { IPermissionsDefinition } from "@etiennea20/adr-nest";
+
+const definition: IPermissionsDefinition = {
+  roles: { librarian: [{ action: "manage", resource: "all" }] },
+};
+```
+
+### `IPermissionRule`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `permissions`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                                    |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/permissions/permission-rule/permission-rule.ts`      |
+| Tests          | `src/permissions/permission-rule/permission-rule.test.ts` |
+
+**Signature**
+
+```ts
+interface IPermissionRule {
+  readonly action: string | readonly string[];
+  readonly resource: string | readonly string[];
+  readonly where?: Readonly<Record<string, PermissionConditionValue>> | undefined;
+}
+```
+
+**Description** : règle de permission : le rôle peut faire `action` sur `resource`, limité aux ressources qui vérifient toutes les conditions de `where` (champ → valeur ; égalité pour une valeur simple, appartenance pour une liste). Jokers : action `"manage"`, ressource `"all"`.
+
+**Exemple**
+
+```ts
+import type { IPermissionRule } from "@etiennea20/adr-nest";
+
+const rule: IPermissionRule = {
+  action: ["read", "cancel"],
+  resource: "loan",
+  where: { memberId: "$subject.id" },
+};
+```
+
+### `PermissionConditionValue`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `permissions`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                                    |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/permissions/permission-rule/permission-rule.ts`      |
+| Tests          | `src/permissions/permission-rule/permission-rule.test.ts` |
+
+**Signature**
+
+```ts
+type PermissionConditionValue = string | number | boolean | readonly (string | number | boolean)[];
+```
+
+**Description** : valeur d'une condition `where` : valeur fixe, référence au sujet (`"$subject.id"`, `"$subject.tenantId"` ; une référence vers une liste donne une appartenance), ou liste de ces valeurs. Une référence absente du sujet rend la règle inapplicable (dans une liste, l'élément est ignoré) : moins de droits, jamais plus.
+
+**Exemple**
+
+```ts
+import type { PermissionConditionValue } from "@etiennea20/adr-nest";
+
+const statuses: PermissionConditionValue = ["active", "late"];
+```
+
+### `IPermissionSubject`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `permissions`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                                    |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/permissions/permission-rule/permission-rule.ts`      |
+| Tests          | `src/permissions/permission-rule/permission-rule.test.ts` |
+
+**Signature**
+
+```ts
+interface IPermissionSubject {
+  readonly roles: readonly string[];
+}
+```
+
+**Description** : sujet d'une vérification de droits. Seul `roles` est lu par les règles ; les autres propriétés (`id`, plus tard `tenantId`) servent aux références `$subject.…`. À étendre dans l'application.
+
+**Exemple**
+
+```ts
+import type { IPermissionSubject } from "@etiennea20/adr-nest";
+
+export interface IMember extends IPermissionSubject {
+  readonly id: string;
+}
+```
+
+### `PermissionsService`
+
+| Champ          | Valeur                                                            |
+| -------------- | ----------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                     |
+| Point d'entrée | `@etiennea20/adr-nest`                                            |
+| Statut         | stable                                                            |
+| Depuis         | 0.2.0                                                             |
+| Source         | `src/permissions/permissions-service/permissions-service.ts`      |
+| Tests          | `src/permissions/permissions-service/permissions-service.test.ts` |
+
+**Signature**
+
+```ts
+class PermissionsService {
+  readonly definition: IPermissionsDefinition;
+  constructor(options: IPermissionsModuleOptions);
+  resolveSubject(context: ExecutionContext): Promise<IPermissionSubject | null>;
+  canOnSome(
+    subject: IPermissionSubject | null | undefined,
+    action: string,
+    resource: string,
+  ): boolean;
+  can(
+    subject: IPermissionSubject | null | undefined,
+    action: string,
+    resource: string,
+    target: object,
+  ): boolean;
+  assertCan(
+    subject: IPermissionSubject | null | undefined,
+    action: string,
+    resource: string,
+    target: object,
+  ): void;
+  scope(
+    subject: IPermissionSubject | null | undefined,
+    action: string,
+    resource: string,
+  ): PermissionScope;
+  isKnownPermission(action: string, resource: string): boolean;
+}
+```
+
+**Description** : vérifie les droits selon les règles du module. `canOnSome` : une règle porte sur l'action et la ressource (conditions ignorées ; contrôle du guard, affichage d'un bouton). `can` / `assertCan` : conditions évaluées sur une ressource chargée (égalité stricte des champs). `scope` : périmètre d'une liste, à combiner avec `andCriteria` (`{ and: [] }` sans restriction, `{ or: [] }` si rien n'est autorisé). Un sujet `null` n'a aucun droit. Testable sans module : `new PermissionsService({ permissions })`.
+
+**Paramètres**
+
+- `subject` : sujet (`null` : anonyme).
+- `action`, `resource` : action et type de ressource.
+- `target` : ressource chargée (`can`, `assertCan`).
+
+**Retour** : un booléen (`canOnSome`, `can`), rien (`assertCan`) ou le périmètre (`scope`).
+
+**Erreurs** : `assertCan` : `UnauthenticatedException` (401) sans sujet, `PermissionDeniedException` (403) sans droit. Constructeur : `PermissionsConfigError` si les règles sont invalides.
+
+**Exemple**
+
+```ts
+import { PermissionsService } from "@etiennea20/adr-nest";
+import { andCriteria } from "@etiennea20/adr-nest/filtering";
+
+const scoped = andCriteria(criteria, this.permissions.scope(member, "read", "loan"));
+this.permissions.assertCan(member, "cancel", "loan", loan); // 403 si ce n'est pas le sien
+```
+
+### `PermissionsGuard`
+
+| Champ          | Valeur                                                        |
+| -------------- | ------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                 |
+| Point d'entrée | `@etiennea20/adr-nest`                                        |
+| Statut         | stable                                                        |
+| Depuis         | 0.2.0                                                         |
+| Source         | `src/permissions/permissions-guard/permissions-guard.ts`      |
+| Tests          | `src/permissions/permissions-guard/permissions-guard.test.ts` |
+
+**Signature**
+
+```ts
+class PermissionsGuard implements CanActivate {
+  constructor(reflector: Reflector, permissions: PermissionsService);
+  canActivate(context: ExecutionContext): Promise<boolean>;
+}
+```
+
+**Description** : guard à refus par défaut, enregistré globalement par `PermissionsModule`. Résout le sujet et le rend disponible à `@CurrentSubject()`, puis : route `@Public()` → acceptée ; sans sujet → 401 ; route non annotée → 403 ; `@Can()` sans règle → 403. L'annotation de la méthode l'emporte sur celle du contrôleur ; sur un même élément, `Public` > `Can` > `Authenticated`.
+
+**Paramètres**
+
+- `context` : contexte d'exécution de NestJS.
+
+**Retour** : `true` si l'accès est accordé.
+
+**Erreurs** : `UnauthenticatedException` (401), `PermissionDeniedException` (403).
+
+**Exemple**
+
+```ts
+import { PermissionsGuard } from "@etiennea20/adr-nest";
+
+// PermissionsModule.forRoot({ permissions, globalGuard: false }) :
+providers: [
+  { provide: APP_GUARD, useClass: JwtAuthGuard },
+  { provide: APP_GUARD, useClass: PermissionsGuard },
+];
+```
+
+### `Can`
+
+| Champ          | Valeur                            |
+| -------------- | --------------------------------- |
+| Catégorie      | `permissions`                     |
+| Point d'entrée | `@etiennea20/adr-nest`            |
+| Statut         | stable                            |
+| Depuis         | 0.2.0                             |
+| Source         | `src/permissions/can/can.ts`      |
+| Tests          | `src/permissions/can/can.test.ts` |
+
+**Signature**
+
+```ts
+function Can(action: string, resource: string): CustomDecorator<"adr:requiredPermission">;
+```
+
+**Description** : exige un droit pour une route (ou toutes les routes d'un contrôleur) : une règle d'un des rôles du sujet doit porter sur `action` et `resource`. Les conditions `where` ne sont pas vérifiées par le guard (ressource non chargée) : utiliser `assertCan` ou `scope` dans le service.
+
+**Paramètres**
+
+- `action` : action exigée.
+- `resource` : type de ressource.
+
+**Retour** : un décorateur de méthode ou de classe.
+
+**Erreurs** : aucune (le guard répond 401 ou 403).
+
+**Exemple**
+
+```ts
+import { Can, CurrentSubject } from "@etiennea20/adr-nest";
+
+@Can("cancel", "loan")
+@Post(":id/annulation")
+cancel(@CurrentSubject() member: IMember, @Param("id") id: string) {
+  return this.loans.cancel(member, id);
+}
+```
+
+### `Authenticated`
+
+| Champ          | Valeur                                                |
+| -------------- | ----------------------------------------------------- |
+| Catégorie      | `permissions`                                         |
+| Point d'entrée | `@etiennea20/adr-nest`                                |
+| Statut         | stable                                                |
+| Depuis         | 0.2.0                                                 |
+| Source         | `src/permissions/authenticated/authenticated.ts`      |
+| Tests          | `src/permissions/authenticated/authenticated.test.ts` |
+
+**Signature**
+
+```ts
+function Authenticated(): CustomDecorator<"adr:isAuthenticated">;
+```
+
+**Description** : ouvre une route (ou toutes les routes d'un contrôleur) à tout sujet authentifié, quels que soient ses rôles. Sans sujet : 401.
+
+**Paramètres**
+
+- aucun.
+
+**Retour** : un décorateur de méthode ou de classe.
+
+**Erreurs** : aucune (le guard répond 401).
+
+**Exemple**
+
+```ts
+import { Authenticated } from "@etiennea20/adr-nest";
+
+@Authenticated()
+@Get(":id")
+get(@Param("id") id: string) {
+  return this.books.get(id);
+}
+```
+
+### `Public`
+
+| Champ          | Valeur                                  |
+| -------------- | --------------------------------------- |
+| Catégorie      | `permissions`                           |
+| Point d'entrée | `@etiennea20/adr-nest`                  |
+| Statut         | stable                                  |
+| Depuis         | 0.1.0                                   |
+| Source         | `src/permissions/public/public.ts`      |
+| Tests          | `src/permissions/public/public.test.ts` |
+
+**Signature**
+
+```ts
+function Public(): CustomDecorator<"adr:isPublic">;
+```
+
+**Description** : marque une route (ou toutes les routes d'un contrôleur) comme publique en posant [`IS_PUBLIC_KEY`](#is_public_key) : `PermissionsGuard` la laisse passer sans sujet. Utilisable aussi avec un guard maison qui lit la métadonnée.
+
+**Paramètres**
+
+- aucun.
+
+**Retour** : un décorateur de méthode ou de classe (`SetMetadata(IS_PUBLIC_KEY, true)`).
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { Public } from "@etiennea20/adr-nest";
+
+@Public()
+@Controller("health")
+export class HealthController {
+  @Get()
+  check() {
+    return { status: "ok" };
+  }
+}
+```
+
+### `IS_PUBLIC_KEY`
+
+| Champ          | Valeur                                  |
+| -------------- | --------------------------------------- |
+| Catégorie      | `permissions`                           |
+| Point d'entrée | `@etiennea20/adr-nest`                  |
+| Statut         | stable                                  |
+| Depuis         | 0.1.0                                   |
+| Source         | `src/permissions/public/public.ts`      |
+| Tests          | `src/permissions/public/public.test.ts` |
+
+**Signature**
+
+```ts
+const IS_PUBLIC_KEY: "adr:isPublic";
+```
+
+**Description** : clé de métadonnée posée par [`Public`](#public), à lire dans un guard maison avec le `Reflector` de NestJS.
+
+**Exemple**
+
+```ts
+import { IS_PUBLIC_KEY } from "@etiennea20/adr-nest";
+
+const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+  context.getHandler(),
+  context.getClass(),
+]);
+```
+
+### `CurrentSubject`
+
+| Champ          | Valeur                                                    |
+| -------------- | --------------------------------------------------------- |
+| Catégorie      | `permissions`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                                    |
+| Statut         | stable                                                    |
+| Depuis         | 0.2.0                                                     |
+| Source         | `src/permissions/current-subject/current-subject.ts`      |
+| Tests          | `src/permissions/current-subject/current-subject.test.ts` |
+
+**Signature**
+
+```ts
+function CurrentSubject(): ParameterDecorator;
+```
+
+**Description** : injecte dans un paramètre de route le sujet résolu par `PermissionsGuard` : toujours présent sur une route `@Authenticated()` ou `@Can()`, `null` sur une route publique appelée sans authentification. Requêtes HTTP uniquement.
+
+**Paramètres**
+
+- aucun.
+
+**Retour** : un décorateur de paramètre.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { Can, CurrentSubject } from "@etiennea20/adr-nest";
+
+@Can("read", "loan")
+@Get()
+list(@CurrentSubject() member: IMember) {
+  return this.loans.findFor(member);
+}
+```
+
+### `IPermissionCondition`
+
+| Champ          | Valeur                                                      |
+| -------------- | ----------------------------------------------------------- |
+| Catégorie      | `permissions`                                               |
+| Point d'entrée | `@etiennea20/adr-nest`                                      |
+| Statut         | stable                                                      |
+| Depuis         | 0.2.0                                                       |
+| Source         | `src/permissions/permission-scope/permission-scope.ts`      |
+| Tests          | `src/permissions/permission-scope/permission-scope.test.ts` |
+
+**Signature**
+
+```ts
+interface IPermissionCondition {
+  readonly path: string;
+  readonly op: "eq" | "in";
+  readonly value: string | number | boolean | readonly (string | number | boolean)[];
+  readonly caseSensitive: true;
+}
+```
+
+**Description** : condition d'un périmètre, références au sujet résolues. Compatible avec `ICriteriaCondition` de `@etiennea20/adr-nest/filtering` (vérifié par un test de types), sans que l'entrée principale dépende du filtrage.
+
+**Exemple**
+
+```ts
+import type { IPermissionCondition } from "@etiennea20/adr-nest";
+
+const condition: IPermissionCondition = {
+  path: "memberId",
+  op: "eq",
+  value: "m-1",
+  caseSensitive: true,
+};
+```
+
+### `PermissionScope`
+
+| Champ          | Valeur                                                      |
+| -------------- | ----------------------------------------------------------- |
+| Catégorie      | `permissions`                                               |
+| Point d'entrée | `@etiennea20/adr-nest`                                      |
+| Statut         | stable                                                      |
+| Depuis         | 0.2.0                                                       |
+| Source         | `src/permissions/permission-scope/permission-scope.ts`      |
+| Tests          | `src/permissions/permission-scope/permission-scope.test.ts` |
+
+**Signature**
+
+```ts
+type PermissionScope =
+  | IPermissionCondition
+  | { readonly and: readonly PermissionScope[] }
+  | { readonly or: readonly PermissionScope[] };
+```
+
+**Description** : périmètre renvoyé par `PermissionsService.scope` : arbre de conditions à ajouter au filtre d'une liste (`andCriteria`, puis `toPrismaFindArgs` ou `applyCriteriaInMemory`). `{ and: [] }` : aucune restriction ; `{ or: [] }` : aucune ressource.
+
+**Exemple**
+
+```ts
+import type { PermissionScope } from "@etiennea20/adr-nest";
+
+const scope: PermissionScope = permissions.scope(member, "read", "loan");
+```
+
+### `UnauthenticatedException`
+
+| Champ          | Valeur                                                                |
+| -------------- | --------------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                         |
+| Point d'entrée | `@etiennea20/adr-nest`                                                |
+| Statut         | stable                                                                |
+| Depuis         | 0.2.0                                                                 |
+| Source         | `src/permissions/permission-exceptions/permission-exceptions.ts`      |
+| Tests          | `src/permissions/permission-exceptions/permission-exceptions.test.ts` |
+
+**Signature**
+
+```ts
+class UnauthenticatedException extends ApiException {
+  constructor();
+}
+```
+
+**Description** : 401 `UNAUTHENTICATED` au format d'erreur d'API : requête sans sujet sur une route protégée, ou `assertCan` sans sujet.
+
+**Exemple**
+
+```ts
+import { UnauthenticatedException } from "@etiennea20/adr-nest";
+
+if (!member) throw new UnauthenticatedException();
+```
+
+### `PermissionDeniedException`
+
+| Champ          | Valeur                                                                |
+| -------------- | --------------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                         |
+| Point d'entrée | `@etiennea20/adr-nest`                                                |
+| Statut         | stable                                                                |
+| Depuis         | 0.2.0                                                                 |
+| Source         | `src/permissions/permission-exceptions/permission-exceptions.ts`      |
+| Tests          | `src/permissions/permission-exceptions/permission-exceptions.test.ts` |
+
+**Signature**
+
+```ts
+class PermissionDeniedException extends ApiException {
+  constructor(action?: string, resource?: string);
+  readonly action?: string;
+  readonly resource?: string;
+}
+```
+
+**Description** : 403 `FORBIDDEN` au format d'erreur d'API. Le corps de la réponse ne révèle ni la règle ni la permission manquante ; `action` et `resource` restent côté serveur, pour la journalisation.
+
+**Exemple**
+
+```ts
+import { PermissionDeniedException } from "@etiennea20/adr-nest";
+
+throw new PermissionDeniedException("cancel", "loan");
+```
+
+### `PermissionsConfigError`
+
+| Champ          | Valeur                                                                      |
+| -------------- | --------------------------------------------------------------------------- |
+| Catégorie      | `permissions`                                                               |
+| Point d'entrée | `@etiennea20/adr-nest`                                                      |
+| Statut         | stable                                                                      |
+| Depuis         | 0.2.0                                                                       |
+| Source         | `src/permissions/permissions-config-error/permissions-config-error.ts`      |
+| Tests          | `src/permissions/permissions-config-error/permissions-config-error.test.ts` |
+
+**Signature**
+
+```ts
+class PermissionsConfigError extends Error {
+  constructor(issues: readonly string[]);
+  readonly issues: readonly string[];
+}
+```
+
+**Description** : erreur de configuration levée au démarrage, jamais à cause d'une requête : règle invalide, route non annotée ou `@Can()` sans règle (mode strict). `issues` liste les problèmes avec leur emplacement.
+
+**Exemple**
+
+```ts
+import { PermissionsConfigError, definePermissions } from "@etiennea20/adr-nest";
+
+try {
+  definePermissions(JSON.parse(raw));
+} catch (error) {
+  if (error instanceof PermissionsConfigError) console.error(error.issues);
+}
 ```
 
 ## filtering
@@ -2132,96 +2871,4 @@ interface IXlsxExportOptions extends IExportOptions {
 import type { IXlsxExportOptions } from "@etiennea20/adr-nest/excel";
 
 const options: IXlsxExportOptions = { sheetName: "Catalogue", maxRows: 10_000 };
-```
-
-## rights
-
-### `Public`
-
-| Champ          | Valeur                             |
-| -------------- | ---------------------------------- |
-| Catégorie      | `rights`                           |
-| Point d'entrée | `@etiennea20/adr-nest`             |
-| Statut         | stable                             |
-| Depuis         | 0.1.0                              |
-| Source         | `src/rights/public/public.ts`      |
-| Tests          | `src/rights/public/public.test.ts` |
-
-**Signature**
-
-```ts
-function Public(): CustomDecorator<"adr:isPublic">;
-```
-
-**Description** : décorateur de méthode ou de classe qui marque une route (ou toutes les routes
-d'un contrôleur) comme publique en posant la métadonnée [`IS_PUBLIC_KEY`](#is_public_key).
-Ne fait rien seul : un guard d'authentification doit lire la métadonnée.
-
-**Paramètres** : aucun.
-
-**Retour** : un décorateur NestJS (`SetMetadata(IS_PUBLIC_KEY, true)`).
-
-**Erreurs** : aucune.
-
-**Exemple**
-
-```ts
-import { Controller, Get } from "@nestjs/common";
-import { Public } from "@etiennea20/adr-nest";
-
-@Controller("health")
-export class HealthController {
-  @Public()
-  @Get()
-  check() {
-    return { status: "ok" };
-  }
-}
-```
-
-### `IS_PUBLIC_KEY`
-
-| Champ          | Valeur                             |
-| -------------- | ---------------------------------- |
-| Catégorie      | `rights`                           |
-| Point d'entrée | `@etiennea20/adr-nest`             |
-| Statut         | stable                             |
-| Depuis         | 0.1.0                              |
-| Source         | `src/rights/public/public.ts`      |
-| Tests          | `src/rights/public/public.test.ts` |
-
-**Signature**
-
-```ts
-const IS_PUBLIC_KEY: "adr:isPublic";
-```
-
-**Description** : clé de métadonnée posée par [`Public`](#public), à lire dans un guard avec le
-`Reflector` de NestJS.
-
-**Paramètres** : sans objet (constante).
-
-**Retour** : sans objet (constante).
-
-**Erreurs** : aucune.
-
-**Exemple**
-
-```ts
-import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
-import { IS_PUBLIC_KEY } from "@etiennea20/adr-nest";
-
-@Injectable()
-export class AuthGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
-
-  canActivate(context: ExecutionContext): boolean {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    return isPublic || Boolean(context.switchToHttp().getRequest().user);
-  }
-}
 ```

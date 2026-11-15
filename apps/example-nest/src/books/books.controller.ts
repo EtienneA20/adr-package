@@ -1,6 +1,6 @@
 // #region public-routes
 import type { IPage } from "@etiennea20/adr-misc/contract";
-import { Public, ValidBody, ValidQuery } from "@etiennea20/adr-nest";
+import { Authenticated, Can, Public, ValidBody, ValidQuery } from "@etiennea20/adr-nest";
 import {
   ExportHeaders,
   assertExportSize,
@@ -45,6 +45,7 @@ export class BooksController {
   // #endregion list-routes
 
   // #region export-route
+  @Can("export", "book") // bibliothécaires uniquement (règle `manage` sur `all`)
   @Get("export") // GET /livres/export?format=csv&filter=…&fields=["title","publishedAt"]
   @ExportHeaders()
   export(
@@ -61,17 +62,20 @@ export class BooksController {
   }
   // #endregion export-route
 
-  @Get(":id") // le détail (avec l'emprunteur) est réservé aux utilisateurs connectés
+  @Authenticated() // le détail est réservé aux utilisateurs connectés, quel que soit leur rôle
+  @Get(":id")
   get(@Param("id") id: string): IBook {
     return this.books.get(id);
   }
 
   // #region validation
+  @Can("create", "book")
   @Post() // NestJS 11 et 12 : pipe du package, erreurs au format d'API
   create(@ValidBody(createBookSchema) input: CreateBookInput): IBook {
     return this.books.create(input);
   }
 
+  @Can("update", "book")
   @Patch(":id") // NestJS 12 : validation native (pipe global de AppModule)
   update(
     @Param("id") id: string,
