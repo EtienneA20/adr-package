@@ -10,7 +10,7 @@
     }
   ],
   "commit": false,
-  "ignore": [],
+  "ignore": ["@etiennea20/example-nest"],
   "fixed": [],
   "linked": [],
   "updateInternalDependencies": "patch",

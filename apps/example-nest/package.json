@@ -1,0 +1,33 @@
+{
+  "name": "@etiennea20/example-nest",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Application NestJS fictive « Bibliothèque » : exemple compilé et testé dont la documentation d'adr-nest extrait ses extraits de code. Jamais publiée.",
+  "type": "commonjs",
+  "scripts": {
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@etiennea20/adr-misc": "workspace:*",
+    "@etiennea20/adr-nest": "workspace:*",
+    "@nestjs/common": "^12.3.3",
+    "@nestjs/core": "^12.3.3",
+    "dayjs": "^1.11.23",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@etiennea20/config": "workspace:*",
+    "@nestjs/testing": "^12.3.3",
+    "@swc/core": "^1.16.22",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "catalog:"
+  }
+}

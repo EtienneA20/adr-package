@@ -5,43 +5,57 @@ title: Routes publiques
 # Routes publiques avec `Public`
 
 Dans une application où toutes les routes sont protégées par un guard global, le décorateur
-`Public()` marque les exceptions (santé, connexion, documentation…). Il pose la métadonnée
+`Public()` marque les exceptions (santé, connexion, catalogue…). Il pose la métadonnée
 `IS_PUBLIC_KEY`, que le guard lit avec le `Reflector`.
 
 ## Exemple : application fictive « Bibliothèque »
 
+Les extraits ci-dessous viennent de l'[application d'exemple](./example-app), compilée et
+testée à chaque intégration.
+
 ### 1. Le guard global lit la métadonnée
 
+{/* snippet: apps/example-nest/src/auth/auth.guard.ts#guard */}
+
 ```ts title="src/auth/auth.guard.ts"
-import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
 import { IS_PUBLIC_KEY } from "@etiennea20/adr-nest";
+import { type CanActivate, type ExecutionContext, Injectable } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+
+interface IAuthenticatedRequest {
+  user?: unknown;
+}
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+    const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
     if (isPublic) return true;
-    return Boolean(context.switchToHttp().getRequest().user);
+    return Boolean(context.switchToHttp().getRequest<IAuthenticatedRequest>().user);
   }
 }
 ```
 
 ### 2. Le guard est enregistré globalement
 
+{/* snippet: apps/example-nest/src/app.module.ts#app-module */}
+
 ```ts title="src/app.module.ts"
 import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
-import { AuthGuard } from "./auth/auth.guard";
-import { BooksController } from "./books/books.controller";
+
+import { AuthGuard } from "./auth";
+import { BooksModule } from "./books";
+import { HealthController } from "./health";
 
 @Module({
-  controllers: [BooksController],
+  imports: [BooksModule],
+  controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
 })
 export class AppModule {}
@@ -49,26 +63,46 @@ export class AppModule {}
 
 ### 3. Les routes publiques sont marquées
 
-```ts title="src/books/books.controller.ts"
-import { Controller, Get, Post } from "@nestjs/common";
-import { Public } from "@etiennea20/adr-nest";
+{/* snippet: apps/example-nest/src/books/books.controller.ts#public-routes */}
 
-@Controller("books")
+```ts title="src/books/books.controller.ts"
+import { Public } from "@etiennea20/adr-nest";
+import { Controller, Get, Param } from "@nestjs/common";
+
+import type { IBook } from "./book";
+import { BooksService } from "./books.service";
+
+@Controller("livres")
 export class BooksController {
+  constructor(private readonly books: BooksService) {}
+
   @Public() // le catalogue est consultable sans compte
   @Get()
-  findAll() {
-    return [{ id: 1, title: "Les Misérables" }];
+  list(): IBook[] {
+    return this.books.list();
   }
 
-  @Post() // l'ajout reste réservé aux utilisateurs connectés
-  create() {
-    return { id: 2 };
+  @Get(":id") // le détail (avec l'emprunteur) est réservé aux utilisateurs connectés
+  get(@Param("id") id: string): IBook {
+    return this.books.get(id);
   }
 }
 ```
 
-Décorer la classe (`@Public()` au-dessus de `@Controller`) rend publiques toutes ses routes.
+Décorer la classe (`@Public()` au-dessus de `@Controller`) rend publiques toutes ses routes :
+
+{/* snippet: apps/example-nest/src/health/health.controller.ts#public-controller */}
+
+```ts title="src/health/health.controller.ts"
+@Public() // toutes les routes du contrôleur sont publiques
+@Controller("health")
+export class HealthController {
+  @Get()
+  check(): { status: "ok" } {
+    return { status: "ok" };
+  }
+}
+```
 
 ## Voir aussi
 
