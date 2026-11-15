@@ -1,5 +1,10 @@
 export * from "./api-error";
 export * from "./api-exception";
+export * from "./api-exception-filter";
+export * from "./define-configurable-module";
+export * from "./module-options-error";
+export * from "./request-id";
+export * from "./request-logging-interceptor";
 export * from "./schema-validation-pipe";
 export type * from "./standard-schema";
 export * from "./validation-exception";

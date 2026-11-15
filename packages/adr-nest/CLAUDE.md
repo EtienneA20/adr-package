@@ -67,14 +67,14 @@ générée depuis le TSDoc.
 
 ## Catégories
 
-| Dossier            | Contenu                                                               |
-| ------------------ | --------------------------------------------------------------------- |
-| `src/common/`      | Format d'erreur d'API, exceptions, validation, éléments transverses   |
-| `src/permissions/` | Permissions : refus par défaut, règles sérialisables, guard, module   |
-| `src/filtering/`   | Sous-chemin `./filtering` : requête de liste → critères neutres       |
-| `src/prisma/`      | Sous-chemin `./prisma` : critères → arguments Prisma (sans import)    |
-| `src/export/`      | Sous-chemin `./export` : JSON, NDJSON, CSV, réponse de téléchargement |
-| `src/excel/`       | Sous-chemin `./excel` : XLSX en flux (writer interne sur fflate)      |
+| Dossier            | Contenu                                                                  |
+| ------------------ | ------------------------------------------------------------------------ |
+| `src/common/`      | Erreurs d'API, validation, filtre, journalisation, modules configurables |
+| `src/permissions/` | Permissions : refus par défaut, règles sérialisables, guard, module      |
+| `src/filtering/`   | Sous-chemin `./filtering` : requête de liste → critères neutres          |
+| `src/prisma/`      | Sous-chemin `./prisma` : critères → arguments Prisma (sans import)       |
+| `src/export/`      | Sous-chemin `./export` : JSON, NDJSON, CSV, réponse de téléchargement    |
+| `src/excel/`       | Sous-chemin `./excel` : XLSX en flux (writer interne sur fflate)         |
 
 Une catégorie n'est réexportée par `src/index.ts` qu'avec son premier élément. Si une catégorie
 dépasse une quinzaine d'éléments, proposer de la diviser.
@@ -93,6 +93,13 @@ dépasse une quinzaine d'éléments, proposer de la diviser.
   spécification) : aucun import de zod dans le code du package. `SchemaValidationPipe`,
   `ValidBody`, `ValidQuery` fonctionnent sous NestJS 11 et 12 ; sous 12,
   `apiValidationExceptionFactory` branche le pipe natif sur le même format.
+- `ApiExceptionFilter` (global) traduit toute exception en format d'erreur d'API ; une erreur
+  inattendue n'expose jamais son message (500 `INTERNAL_ERROR`, pile journalisée). Ne jamais
+  ajouter au corps d'erreur une donnée issue d'une exception non `ApiException` sans la filtrer.
+- Journaux et `instance` : chemin sans paramètres d'URL (`requestPath`) ; identifiant de
+  corrélation via `requestIdOf` (en-tête `x-request-id` validé, sinon UUID).
+- Module réutilisable configuré par l'application : `defineConfigurableModule` (options
+  validées par schéma au démarrage), plutôt qu'un `forRoot` écrit à la main.
 - Toute erreur exposée au client suit le format d'erreur d'API (`ApiException`, RFC 9457 +
   `code`). `EApiErrorCode`, `IApiError` et `API_ERROR_CONTENT_TYPE` reproduisent ceux
   d'`@etiennea20/adr-misc/contract` : `src/common/api-error/api-error.test.ts` vérifie qu'ils

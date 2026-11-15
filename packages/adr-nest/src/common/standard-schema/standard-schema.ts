@@ -76,3 +76,19 @@ export interface IStandardSchema<TInput = unknown, TOutput = TInput> {
 export type InferSchemaOutput<S extends IStandardSchema> = NonNullable<
   S["~standard"]["types"]
 >["output"];
+
+/**
+ * Type d'entrée d'un schéma Standard Schema (valeur acceptée avant validation : champs avec
+ * valeur par défaut facultatifs).
+ *
+ * @typeParam S - Schéma.
+ * @example
+ * ```ts
+ * const optionsSchema = z.object({ days: z.int().default(3) });
+ * type OptionsInput = InferSchemaInput<typeof optionsSchema>; // { days?: number | undefined }
+ * ```
+ * @since 0.2.0
+ */
+export type InferSchemaInput<S extends IStandardSchema> = NonNullable<
+  S["~standard"]["types"]
+>["input"];
