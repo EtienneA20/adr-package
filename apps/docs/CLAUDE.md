@@ -33,6 +33,10 @@ dans une seule interface, avec un playground live pour `adr-react`.
   « Bibliothèque »). La référence API (`docs/<section>/api/`) est **générée** par
   `docusaurus-plugin-typedoc` depuis le TSDoc à chaque `dev` / `build` : ne jamais l'éditer,
   elle est ignorée par Git et Prettier.
+- **Sous-chemins d'un package backend** (`@etiennea20/adr-misc/contract`) : les déclarer dans
+  `typedocPlugin(section, subpaths)` ; chaque point d'entrée porte un commentaire de fichier
+  `@packageDocumentation` + `@module <nom>` (tag déclaré dans `@etiennea20/config/tsdoc.json`),
+  qui donne l'URL de sa référence (`/misc/api/contract/…`).
 - Libellés de la référence API en français (`lang: "fr"` + `locales` dans
   `docusaurus.config.ts` pour les tags non traduits par typedoc).
 - `onBrokenLinks: "throw"` : un lien cassé fait échouer le build.

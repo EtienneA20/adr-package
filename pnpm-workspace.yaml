@@ -20,6 +20,7 @@ catalog:
   vitest: ^5.1.0
   "@vitest/coverage-v8": ^5.1.0
   "@types/node": ^26.6.6
+  zod: ^4.6.7
 
 overrides:
   # eslint-plugin-tsdoc épingle une version de @typescript-eslint/utils qui refuse TypeScript 6 :

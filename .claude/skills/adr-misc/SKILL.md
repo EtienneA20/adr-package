@@ -1,6 +1,6 @@
 ---
 name: adr-misc
-description: "À utiliser pour développer ou utiliser @etiennea20/adr-misc : utilitaires TypeScript partagés entre front (navigateur) et back (Node, NestJS) : assertions et gestion d'erreurs, gardes et types utilitaires, fonctions asynchrones (retry, debounce, timeout), tableaux, objets, chaînes et casse, calculs, aléatoire, parsing (nombres, dates avec dayjs, durées, CSV), formatage français, dates (jours fériés, jours ouvrés), énumérations, validation (email, SIRET, IBAN, NIR), URL, fichiers et couleurs. Donne l'inventaire des fonctions, types et énumérations publics, leur signature, leurs erreurs et un exemple d'utilisation."
+description: "À utiliser pour développer ou utiliser @etiennea20/adr-misc : utilitaires TypeScript partagés entre front (navigateur) et back (Node, NestJS) : assertions et gestion d'erreurs, gardes et types utilitaires, fonctions asynchrones (retry, debounce, timeout), tableaux, objets, chaînes et casse, calculs, aléatoire, parsing (nombres, dates avec dayjs, durées, CSV), formatage français, dates (jours fériés, jours ouvrés), énumérations, validation (email, SIRET, IBAN, NIR), URL, fichiers et couleurs ; sous-chemin /contract (zod) : contrat de liste partagé front / back (filtre, tri, pagination, sélection de champs) et format d'erreur d'API RFC 9457. Donne l'inventaire des fonctions, types et énumérations publics, leur signature, leurs erreurs et un exemple d'utilisation."
 metadata:
   generated-by: adr-package/install-skills
   source: packages/adr-misc/SKILLS.md
@@ -13,7 +13,9 @@ metadata:
 Utilitaires sans dépendance d'environnement, utilisables dans le navigateur comme dans Node
 (ESM et CJS). Aucune dépendance React ni NestJS.
 
-- Point d'entrée unique : `@etiennea20/adr-misc`.
+- Points d'entrée : `@etiennea20/adr-misc` (tout sauf `contract`) et
+  `@etiennea20/adr-misc/contract` (contrat de liste et format d'erreur d'API ; exige `zod` ≥ 4,
+  peerDependency optionnelle).
 - `dayjs` est une peerDependency : le projet consommateur l'installe et configure ses plugins
   (`dayjs.extend`) une seule fois ; les fonctions du package utilisent cette même instance.
 - Conventions : fonctions pures et immuables, formats français par défaut (`fr-FR`, `EUR`,
@@ -41,6 +43,7 @@ Utilitaires sans dépendance d'environnement, utilisables dans le navigateur com
 - [url](reference.md#url) : URL et query strings (`buildQueryString`, `buildUrl`, `getUrlParts`, `IBuildQueryStringOptions`, `isAbsoluteUrl`, `IUrlParts`, `joinUrl`, `ParsedQueryString`, `parseQueryString`, `QueryParams`, `QueryParamValue`)
 - [file](reference.md#file) : noms de fichiers et types MIME (`changeFileExtension`, `getFileBaseName`, `getFileExtension`, `getFileName`, `getMimeType`, `ISanitizeFileNameOptions`, `isImageFile`, `sanitizeFileName`)
 - [color](reference.md#color) : couleurs et contraste (`darkenColor`, `getContrastRatio`, `getLuminance`, `getReadableTextColor`, `hexToRgb`, `IReadableTextColorOptions`, `IRgbColor`, `IStringToColorOptions`, `lightenColor`, `mixColors`, `rgbToHex`, `stringToColor`, `withAlpha`)
+- [contract](reference.md#contract) : contrat de liste et format d'erreur d'API, sous-chemin `/contract` (`API_ERROR_CONTENT_TYPE`, `ApiError`, `ApiErrorIssue`, `apiErrorIssueSchema`, `apiErrorSchema`, `DEFAULT_LIST_QUERY_LIMITS`, `defineListQuery`, `EApiErrorCode`, `EFieldType`, `EFilterOperator`, `FIELD_TYPE_OPERATORS`, `FieldDefinitions`, `FilterableField`, `FilterNode`, `FilterScalar`, `FilterValue`, `IFieldDefinition`, `IFilterAndGroup`, `IFilterCondition`, `IFilterNotGroup`, `IFilterOrGroup`, `IListQuery`, `IListQueryDefaults`, `IListQueryDefinition`, `IListQueryLimits`, `IListQueryOptions`, `IPage`, `IResolvedField`, `isFilterCondition`, `ISortItem`, `ListQueryInput`, `pageSchema`, `SelectableField`, `SortableField`, `toListQuerySearchParams`)
 
 ## Retrouver un élément
 

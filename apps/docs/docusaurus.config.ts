@@ -19,13 +19,20 @@ function withBackground(theme: PrismTheme, backgroundColor: string): PrismTheme 
  * Référence API générée depuis le TSDoc d'un package (docusaurus-plugin-typedoc), en français.
  * Le résultat (`docs/<section>/api/`) est généré à chaque démarrage et ignoré par Git.
  */
-function typedocPlugin(section: "nest" | "misc"): [string, Record<string, unknown>] {
+function typedocPlugin(
+  section: "nest" | "misc",
+  subpaths: readonly string[] = [],
+): [string, Record<string, unknown>] {
   const packageDir = `../../packages/adr-${section}`;
   return [
     "docusaurus-plugin-typedoc",
     {
       id: `typedoc-${section}`,
-      entryPoints: [`${packageDir}/src/index.ts`],
+      // Un point d'entrée par sous-chemin `exports` du package (même liste que tsup / tsc).
+      entryPoints: [
+        `${packageDir}/src/index.ts`,
+        ...subpaths.map((subpath) => `${packageDir}/src/${subpath}/index.ts`),
+      ],
       tsconfig: `${packageDir}/tsconfig.json`,
       out: `docs/${section}/api`,
       lang: "fr",
@@ -68,7 +75,7 @@ const config: Config = {
   ],
 
   themes: ["@docusaurus/theme-live-codeblock"],
-  plugins: [typedocPlugin("nest"), typedocPlugin("misc")],
+  plugins: [typedocPlugin("nest"), typedocPlugin("misc", ["contract"])],
 
   themeConfig: {
     // Bascule à deux états (clair / sombre) : le thème du système n'est pas suivi.

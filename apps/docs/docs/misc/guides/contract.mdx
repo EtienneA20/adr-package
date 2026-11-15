@@ -1,0 +1,196 @@
+---
+title: Contrat de liste et erreurs d'API
+sidebar_label: Contrat de liste
+sidebar_position: 20
+---
+
+# Contrat de liste et erreurs d'API
+
+Le sous-chemin `@etiennea20/adr-misc/contract` décrit, avec des schémas
+[zod](https://zod.dev), ce qu'un client peut demander à une liste paginée (filtre, recherche,
+tri, pagination, sélection de champs) et la forme des erreurs renvoyées par l'API. Le même
+code est importé par le front (TanStack Start, react-hook-form) et par l'API (NestJS) : aucun
+type n'est dupliqué, aucun code n'est généré.
+
+```sh
+pnpm add @etiennea20/adr-misc zod
+```
+
+`zod` (≥ 4) est une peerDependency **optionnelle** : seul ce sous-chemin l'utilise, l'entrée
+principale `@etiennea20/adr-misc` n'en a pas besoin.
+
+Les exemples ci-dessous sont tirés d'une application fictive « Bibliothèque ».
+
+## Déclarer le contrat d'une liste
+
+Le contrat se déclare une fois, dans le code partagé. Chaque champ dit ce que le client peut en
+faire ; **tout est refusé par défaut**.
+
+```ts title="shared/books/book-list-query.ts"
+import { defineListQuery } from "@etiennea20/adr-misc/contract";
+import type { z } from "zod";
+
+export const bookListQuery = defineListQuery({
+  fields: {
+    id: { type: "uuid", filter: ["eq", "in"], select: true },
+    title: { type: "string", filter: true, sort: true, select: true, search: true },
+    status: { type: "enum", values: ["available", "loaned"], filter: true, select: true },
+    publishedAt: { type: "date", filter: true, sort: true, select: true },
+    "author.name": { type: "string", filter: ["eq", "contains"], sort: true, search: true },
+  },
+  defaults: { sort: [{ field: "title", direction: "asc" }], pageSize: 20 },
+  limits: { maxDepth: 4, maxConditions: 50 },
+});
+
+export type BookListQuery = z.infer<typeof bookListQuery.schema>;
+```
+
+| Capacité        | Effet                                                                       |
+| --------------- | --------------------------------------------------------------------------- |
+| `filter: true`  | Tous les opérateurs du type (`FIELD_TYPE_OPERATORS`)                        |
+| `filter: [...]` | Seulement ces opérateurs (ils doivent être permis pour le type)             |
+| `sort: true`    | Utilisable dans `sort`                                                      |
+| `select: true`  | Demandable dans `fields`                                                    |
+| `search: true`  | Inclus dans la recherche globale `q` (contient, OU entre les champs, texte) |
+
+Un nom de champ est un identifiant (`title`) ou un chemin de relation **à un seul niveau**
+(`author.name`) : c'est un nom public, que le serveur associe à ses propres colonnes. Une
+définition incohérente (opérateur incompatible avec le type, `enum` sans valeurs, tri par
+défaut sur un champ non triable…) lève une `RangeError` dès le chargement du module.
+
+## Forme d'une requête
+
+```ts
+const query: BookListQuery = bookListQuery.schema.parse({
+  filter: {
+    or: [
+      { field: "status", op: "eq", value: "available" },
+      {
+        and: [
+          { field: "publishedAt", op: "between", value: ["1960-01-01", "1969-12-31"] },
+          { not: { field: "author.name", op: "contains", value: "anonyme" } },
+        ],
+      },
+    ],
+  },
+  q: "dune",
+  sort: [{ field: "publishedAt", direction: "desc" }],
+  page: 2,
+  fields: ["id", "title"],
+});
+// query.pageSize === 20, query.withTotal === true (valeurs par défaut)
+```
+
+- **Filtre** : un arbre de conditions `{ field, op, value }` combinées par `{ and: [...] }`,
+  `{ or: [...] }` et `{ not: ... }`. Les opérateurs de texte (`contains`, `startsWith`,
+  `endsWith`) sont insensibles à la casse, sauf `caseSensitive: true`. Les dates circulent en
+  texte ISO 8601 (`2026-01-31` ou `2026-01-31T10:00:00Z`).
+- **Pagination par pages** : `page` (à partir de 1) et `pageSize`. `withTotal: false` évite le
+  comptage côté serveur (liste infinie, grosses tables).
+- **Limites** : profondeur des groupes, nombre de conditions, taille des listes `in`, longueur
+  des textes, taille de page, nombre de champs de tri (voir `DEFAULT_LIST_QUERY_LIMITS`). Un
+  dépassement est signalé par un problème zod portant `params.code = "QUERY_LIMIT_EXCEEDED"`.
+- Les clés inconnues du filtre sont refusées (`__proto__` compris) ; les clés inconnues du
+  premier niveau sont ignorées, pour qu'une route front puisse porter d'autres paramètres.
+
+## Côté front : URL et appel de l'API
+
+Avec TanStack Router, le schéma valide directement les paramètres de recherche de la route
+(zod 4 implémente Standard Schema : aucun adaptateur n'est nécessaire).
+
+```tsx title="app/routes/livres.tsx"
+import { createFileRoute } from "@tanstack/react-router";
+import { bookListQuery } from "~/shared/books/book-list-query";
+
+export const Route = createFileRoute("/livres")({
+  validateSearch: bookListQuery.schema,
+});
+```
+
+Pour appeler l'API, `toListQuerySearchParams` encode la requête avec la même convention que
+TanStack Router : un paramètre par clé, en JSON (texte brut pour une simple chaîne).
+
+```ts title="app/books/books-api.ts"
+import { buildUrl } from "@etiennea20/adr-misc";
+import { pageSchema, toListQuerySearchParams } from "@etiennea20/adr-misc/contract";
+import { z } from "zod";
+import type { bookListQuery } from "~/shared/books/book-list-query";
+
+const bookPageSchema = pageSchema(z.object({ id: z.uuid(), title: z.string() }));
+
+export async function fetchBooks(query: z.input<typeof bookListQuery.schema>) {
+  const url = buildUrl("https://api.bibliotheque.fr", "/livres", toListQuerySearchParams(query));
+  const response = await fetch(url);
+  return bookPageSchema.parse(await response.json());
+}
+```
+
+`bookListQuery.fields` décrit chaque champ résolu (type, opérateurs permis, triable…) : de quoi
+construire les menus de filtre et de tri d'un tableau MUI sans répéter la liste blanche.
+
+## Côté serveur : valider les paramètres d'URL
+
+`searchParamsSchema` accepte l'objet des paramètres d'URL (`req.query`). Chaque paramètre est
+borné en longueur **avant** d'être décodé, puis lu en JSON (ou en texte brut). Une requête de
+recherche plus complexe peut aussi arriver dans le corps d'un `POST /livres/search`, validé par
+`schema`.
+
+```ts
+const result = bookListQuery.searchParamsSchema.safeParse(request.query);
+if (!result.success) {
+  // 400 : voir le format d'erreur ci-dessous
+}
+```
+
+`@etiennea20/adr-nest` fournit le décorateur NestJS qui fait cette validation et convertit la
+requête en conditions d'ORM.
+
+## Lire une erreur d'API
+
+Les erreurs suivent la RFC 9457 (Problem Details, `application/problem+json`), avec un `code`
+stable, le détail par champ et l'identifiant de corrélation de la requête.
+
+```json
+{
+  "type": "about:blank",
+  "title": "Paramètres de liste invalides",
+  "status": 400,
+  "code": "INVALID_QUERY",
+  "errors": [{ "path": "filter.or.1.value", "message": "Nombre attendu", "code": "invalid_type" }],
+  "requestId": "4f1c2a7e"
+}
+```
+
+Côté front, `apiErrorSchema` relit ce corps, et `path` se passe tel quel à `setError` de
+react-hook-form :
+
+```ts title="app/books/book-form.ts"
+import {
+  API_ERROR_CONTENT_TYPE,
+  EApiErrorCode,
+  apiErrorSchema,
+} from "@etiennea20/adr-misc/contract";
+import type { UseFormSetError } from "react-hook-form";
+
+export async function applyApiErrors(response: Response, setError: UseFormSetError<IBookForm>) {
+  if (!response.headers.get("content-type")?.startsWith(API_ERROR_CONTENT_TYPE)) return;
+  const result = apiErrorSchema.safeParse(await response.json());
+  if (result.success && result.data.code === EApiErrorCode.VALIDATION_FAILED) {
+    for (const issue of result.data.errors ?? []) {
+      setError(issue.path as keyof IBookForm, { message: issue.message });
+    }
+  }
+}
+```
+
+## Messages en français
+
+Les messages propres au contrat (champ non autorisé, limite dépassée, bornes inversées…) sont
+en français. Les messages génériques de zod (« nombre attendu ») suivent la locale configurée
+par le projet, une fois au démarrage, côté front comme côté serveur :
+
+```ts
+import { z } from "zod";
+
+z.config(z.locales.fr());
+```

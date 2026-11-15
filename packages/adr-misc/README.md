@@ -22,6 +22,13 @@ pnpm add @etiennea20/adr-misc dayjs
 
 `dayjs` (≥ 1.11) est une peerDependency : votre projet en fournit l'instance (et ses plugins).
 
+Le sous-chemin `@etiennea20/adr-misc/contract` (contrat de liste partagé front / back et format
+d'erreur d'API) exige en plus `zod` (≥ 4), peerDependency optionnelle :
+
+```sh
+pnpm add zod
+```
+
 ## Exemple minimal
 
 ```ts
