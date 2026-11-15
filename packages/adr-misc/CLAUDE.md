@@ -56,6 +56,9 @@ serveur.
   configurée par le projet.
 - Un dépassement de limite porte `params.code = EApiErrorCode.QUERY_LIMIT_EXCEEDED` sur le
   problème zod : le serveur en déduit le code d'erreur d'API.
+- Le format d'erreur (`EApiErrorCode`, `ApiError`, `API_ERROR_CONTENT_TYPE`) est reproduit dans
+  `@etiennea20/adr-nest` (entrée principale sans zod) ; un test d'adr-nest vérifie qu'ils
+  restent identiques : modifier les deux ensemble.
 
 ## Catégories
 

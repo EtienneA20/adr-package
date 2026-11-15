@@ -16,17 +16,630 @@ décorateurs (`emitDecoratorMetadata`).
 
 - Point d'entrée unique : `@etiennea20/adr-nest`.
 - peerDependencies : `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs`.
-- Catégories : `core` (méthodes avancées NestJS), `rights` (gestion des droits), `filtering`
-  (filtrage avancé), `export` (export Excel et JSON).
+- Catégories : `common` (format d'erreur d'API, exceptions, validation, éléments
+  transverses), `rights` (gestion des droits), `filtering` (filtrage avancé), `export` (export
+  Excel et JSON).
 
 ## Table des matières
 
-- `core` : méthodes avancées NestJS (aucun élément pour l'instant)
+- [common](#common) : format d'erreur d'API, exceptions et validation (`API_ERROR_CONTENT_TYPE`, `ApiException`, `apiValidationExceptionFactory`, `EApiErrorCode`, `IApiError`, `IApiErrorIssue`, `IApiExceptionOptions`, `InferSchemaOutput`, `IStandardSchema`, `IStandardSchemaIssue`, `IValidationExceptionOptions`, `SchemaValidationPipe`, `StandardSchemaResult`, `ValidationException`, `ValidBody`, `ValidQuery`)
 - [rights](#rights) : gestion des droits
   - [`Public`](#public)
   - [`IS_PUBLIC_KEY`](#is_public_key)
 - `filtering` : filtrage avancé (aucun élément pour l'instant)
 - `export` : export Excel et JSON (aucun élément pour l'instant)
+
+## common
+
+Format d'erreur d'API (RFC 9457 + `code`), exceptions et validation par schéma Standard Schema (zod 4). Aucune dépendance au-delà des peerDependencies NestJS.
+
+### `SchemaValidationPipe`
+
+| Champ          | Valeur                                                             |
+| -------------- | ------------------------------------------------------------------ |
+| Catégorie      | `common`                                                           |
+| Point d'entrée | `@etiennea20/adr-nest`                                             |
+| Statut         | stable                                                             |
+| Depuis         | 0.2.0                                                              |
+| Source         | `src/common/schema-validation-pipe/schema-validation-pipe.ts`      |
+| Tests          | `src/common/schema-validation-pipe/schema-validation-pipe.test.ts` |
+
+**Signature**
+
+```ts
+class SchemaValidationPipe<S extends IStandardSchema> implements PipeTransform<
+  unknown,
+  Promise<InferSchemaOutput<S>>
+> {
+  constructor(schema: S, options?: IValidationExceptionOptions);
+  readonly schema: S;
+  transform(value: unknown): Promise<InferSchemaOutput<S>>;
+}
+```
+
+**Description** : pipe de validation générique (NestJS 11 et 12) : valide une valeur avec un schéma Standard Schema (zod 4, Valibot, ArkType…) et renvoie la valeur **produite par le schéma** (textes nettoyés, valeurs par défaut, clés inconnues retirées par zod). Le schéma est la source de vérité du type : pas de DTO ni de `class-validator`. Préférer les raccourcis `ValidBody` et `ValidQuery`.
+
+**Paramètres**
+
+- `schema` : schéma Standard Schema.
+- `options` : code, titre et statut de l'erreur levée (`IValidationExceptionOptions`).
+- `transform(value)` : valeur reçue (corps, paramètres de requête…).
+
+**Retour** : `transform` renvoie (promesse) la valeur produite par le schéma.
+
+**Erreurs** : `transform` lève `ValidationException` (400 `VALIDATION_FAILED` par défaut, détail par champ) si la valeur ne respecte pas le schéma.
+
+**Exemple**
+
+```ts
+import { SchemaValidationPipe } from "@etiennea20/adr-nest";
+import { Body, Controller, Post } from "@nestjs/common";
+import { z } from "zod";
+
+const createBookSchema = z.object({ title: z.string().trim().min(1) });
+
+@Controller("livres")
+export class BooksController {
+  @Post()
+  create(
+    @Body(new SchemaValidationPipe(createBookSchema)) input: z.output<typeof createBookSchema>,
+  ) {
+    return input;
+  }
+}
+```
+
+### `ValidBody`
+
+| Champ          | Valeur                                                             |
+| -------------- | ------------------------------------------------------------------ |
+| Catégorie      | `common`                                                           |
+| Point d'entrée | `@etiennea20/adr-nest`                                             |
+| Statut         | stable                                                             |
+| Depuis         | 0.2.0                                                              |
+| Source         | `src/common/schema-validation-pipe/schema-validation-pipe.ts`      |
+| Tests          | `src/common/schema-validation-pipe/schema-validation-pipe.test.ts` |
+
+**Signature**
+
+```ts
+function ValidBody(
+  schema: IStandardSchema,
+  options?: IValidationExceptionOptions,
+): ParameterDecorator;
+```
+
+**Description** : décorateur de paramètre : le corps de la requête, validé par un schéma Standard Schema. Raccourci de `@Body(new SchemaValidationPipe(schema, options))`, valable sous NestJS 11 et 12. Typer le paramètre avec `z.output<typeof schema>`.
+
+**Paramètres**
+
+- `schema` : schéma du corps.
+- `options` : code, titre et statut de l'erreur.
+
+**Retour** : un décorateur de paramètre.
+
+**Erreurs** : à l'exécution de la route, `ValidationException` si le corps est invalide.
+
+**Exemple**
+
+```ts
+import { ValidBody } from "@etiennea20/adr-nest";
+
+@Post()
+create(@ValidBody(createBookSchema) input: CreateBookInput) {
+  return this.books.create(input);
+}
+```
+
+### `ValidQuery`
+
+| Champ          | Valeur                                                             |
+| -------------- | ------------------------------------------------------------------ |
+| Catégorie      | `common`                                                           |
+| Point d'entrée | `@etiennea20/adr-nest`                                             |
+| Statut         | stable                                                             |
+| Depuis         | 0.2.0                                                              |
+| Source         | `src/common/schema-validation-pipe/schema-validation-pipe.ts`      |
+| Tests          | `src/common/schema-validation-pipe/schema-validation-pipe.test.ts` |
+
+**Signature**
+
+```ts
+function ValidQuery(
+  schema: IStandardSchema,
+  options?: IValidationExceptionOptions,
+): ParameterDecorator;
+```
+
+**Description** : décorateur de paramètre : l'objet des paramètres de requête (`?…`), validé par un schéma Standard Schema. Raccourci de `@Query(new SchemaValidationPipe(schema, options))`. Les paramètres d'URL arrivent en texte : utiliser `z.coerce` pour les nombres et booléens. Pour une liste paginée, préférer le décorateur du filtrage.
+
+**Paramètres**
+
+- `schema` : schéma des paramètres de requête.
+- `options` : code, titre et statut de l'erreur.
+
+**Retour** : un décorateur de paramètre.
+
+**Erreurs** : à l'exécution de la route, `ValidationException` si les paramètres sont invalides.
+
+**Exemple**
+
+```ts
+import { ValidQuery } from "@etiennea20/adr-nest";
+import { z } from "zod";
+
+const availableQuerySchema = z.object({ limit: z.coerce.number().int().max(50).default(10) });
+
+@Get("disponibles")
+available(@ValidQuery(availableQuerySchema) query: z.output<typeof availableQuerySchema>) {
+  return this.books.available(query.limit);
+}
+```
+
+### `ValidationException`
+
+| Champ          | Valeur                                                         |
+| -------------- | -------------------------------------------------------------- |
+| Catégorie      | `common`                                                       |
+| Point d'entrée | `@etiennea20/adr-nest`                                         |
+| Statut         | stable                                                         |
+| Depuis         | 0.2.0                                                          |
+| Source         | `src/common/validation-exception/validation-exception.ts`      |
+| Tests          | `src/common/validation-exception/validation-exception.test.ts` |
+
+**Signature**
+
+```ts
+class ValidationException extends ApiException {
+  constructor(issues: readonly IStandardSchemaIssue[], options?: IValidationExceptionOptions);
+}
+```
+
+**Description** : erreur de validation au format d'erreur d'API : 400 (ou 422), code `VALIDATION_FAILED` par défaut, titre « Données invalides », `errors` = un problème par champ (`path` en notation pointée, `message`, `code` : `params.code` applicatif s'il existe, sinon le code zod). Levée par `SchemaValidationPipe` et `apiValidationExceptionFactory` ; à lever soi-même après une validation manuelle.
+
+**Paramètres**
+
+- `issues` : problèmes renvoyés par un schéma Standard Schema.
+- `options` : code, titre et statut (`IValidationExceptionOptions`).
+
+**Retour** : sans objet (classe).
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { ValidationException } from "@etiennea20/adr-nest";
+
+const result = await createBookSchema["~standard"].validate(input);
+if (result.issues) throw new ValidationException(result.issues);
+```
+
+### `IValidationExceptionOptions`
+
+| Champ          | Valeur                                                         |
+| -------------- | -------------------------------------------------------------- |
+| Catégorie      | `common`                                                       |
+| Point d'entrée | `@etiennea20/adr-nest`                                         |
+| Statut         | stable                                                         |
+| Depuis         | 0.2.0                                                          |
+| Source         | `src/common/validation-exception/validation-exception.ts`      |
+| Tests          | `src/common/validation-exception/validation-exception.test.ts` |
+
+**Signature**
+
+```ts
+interface IValidationExceptionOptions {
+  readonly code?: string | undefined;
+  readonly title?: string | undefined;
+  readonly status?: 400 | 422 | undefined;
+}
+```
+
+**Description** : options d'une `ValidationException` (et de `SchemaValidationPipe`, `ValidBody`, `ValidQuery`) : code (`VALIDATION_FAILED`), titre (« Données invalides ») et statut (400) de la réponse.
+
+**Exemple**
+
+```ts
+import type { IValidationExceptionOptions } from "@etiennea20/adr-nest";
+
+const options: IValidationExceptionOptions = {
+  code: "INVALID_QUERY",
+  title: "Paramètres de liste invalides",
+};
+```
+
+### `apiValidationExceptionFactory`
+
+| Champ          | Valeur                                                         |
+| -------------- | -------------------------------------------------------------- |
+| Catégorie      | `common`                                                       |
+| Point d'entrée | `@etiennea20/adr-nest`                                         |
+| Statut         | stable                                                         |
+| Depuis         | 0.2.0                                                          |
+| Source         | `src/common/validation-exception/validation-exception.ts`      |
+| Tests          | `src/common/validation-exception/validation-exception.test.ts` |
+
+**Signature**
+
+```ts
+function apiValidationExceptionFactory(
+  issues: readonly IStandardSchemaIssue[],
+): ValidationException;
+```
+
+**Description** : fabrique d'exception pour le `StandardSchemaValidationPipe` natif de NestJS 12 (`@Body({ schema })`) : ses erreurs suivent alors le format d'erreur d'API. Sous NestJS 11, utiliser `SchemaValidationPipe`, `ValidBody` ou `ValidQuery`.
+
+**Paramètres**
+
+- `issues` : problèmes renvoyés par le schéma.
+
+**Retour** : une `ValidationException` (400, `VALIDATION_FAILED`).
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { apiValidationExceptionFactory } from "@etiennea20/adr-nest";
+import { StandardSchemaValidationPipe } from "@nestjs/common";
+import { APP_PIPE } from "@nestjs/core";
+
+const providers = [
+  {
+    provide: APP_PIPE,
+    useValue: new StandardSchemaValidationPipe({ exceptionFactory: apiValidationExceptionFactory }),
+  },
+];
+```
+
+### `ApiException`
+
+| Champ          | Valeur                                           |
+| -------------- | ------------------------------------------------ |
+| Catégorie      | `common`                                         |
+| Point d'entrée | `@etiennea20/adr-nest`                           |
+| Statut         | stable                                           |
+| Depuis         | 0.2.0                                            |
+| Source         | `src/common/api-exception/api-exception.ts`      |
+| Tests          | `src/common/api-exception/api-exception.test.ts` |
+
+**Signature**
+
+```ts
+class ApiException extends HttpException {
+  constructor(options: IApiExceptionOptions);
+  readonly code: string;
+  getResponse(): IApiError;
+}
+```
+
+**Description** : exception HTTP dont la réponse suit le format d'erreur d'API (RFC 9457 + `code`). À lever pour une erreur métier que le front reconnaît par son code, plutôt qu'une `HttpException` au corps libre. `message` vaut `detail`, sinon `title` ; `cause` est conservée pour les journaux, jamais envoyée. Sans filtre dédié, NestJS renvoie déjà ce corps avec le bon statut.
+
+**Paramètres**
+
+- `options` : statut, code, titre, détail, problèmes par champ, type, cause (`IApiExceptionOptions`).
+
+**Retour** : sans objet (classe) ; `getResponse()` renvoie une copie du corps.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { ApiException } from "@etiennea20/adr-nest";
+
+throw new ApiException({
+  status: 409,
+  code: "LOAN_LIMIT_REACHED",
+  title: "Nombre maximal d'emprunts atteint",
+  detail: "Un adhérent ne peut pas emprunter plus de 5 livres.",
+});
+```
+
+### `IApiExceptionOptions`
+
+| Champ          | Valeur                                           |
+| -------------- | ------------------------------------------------ |
+| Catégorie      | `common`                                         |
+| Point d'entrée | `@etiennea20/adr-nest`                           |
+| Statut         | stable                                           |
+| Depuis         | 0.2.0                                            |
+| Source         | `src/common/api-exception/api-exception.ts`      |
+| Tests          | `src/common/api-exception/api-exception.test.ts` |
+
+**Signature**
+
+```ts
+interface IApiExceptionOptions {
+  readonly status: number;
+  readonly code: string;
+  readonly title: string;
+  readonly detail?: string | undefined;
+  readonly errors?: readonly IApiErrorIssue[] | undefined;
+  readonly type?: string | undefined;
+  readonly cause?: unknown;
+}
+```
+
+**Description** : description d'une erreur d'API passée à `ApiException` : statut, code stable, titre (français), détail, problèmes par champ, URI du type (`about:blank` par défaut) et erreur d'origine.
+
+**Exemple**
+
+```ts
+import type { IApiExceptionOptions } from "@etiennea20/adr-nest";
+
+const options: IApiExceptionOptions = {
+  status: 409,
+  code: "LOAN_LIMIT_REACHED",
+  title: "Trop d'emprunts",
+};
+```
+
+### `IApiError`
+
+| Champ          | Valeur                                   |
+| -------------- | ---------------------------------------- |
+| Catégorie      | `common`                                 |
+| Point d'entrée | `@etiennea20/adr-nest`                   |
+| Statut         | stable                                   |
+| Depuis         | 0.2.0                                    |
+| Source         | `src/common/api-error/api-error.ts`      |
+| Tests          | `src/common/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+interface IApiError {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string | undefined;
+  instance?: string | undefined;
+  code: string;
+  errors?: IApiErrorIssue[] | undefined;
+  requestId?: string | undefined;
+}
+```
+
+**Description** : corps d'une réponse d'erreur d'API : RFC 9457 étendue par `code`, `errors` et `requestId`. Même forme que `ApiError` de `@etiennea20/adr-misc/contract` (vérifié par un test), que le front relit avec `apiErrorSchema`.
+
+**Exemple**
+
+```ts
+import type { IApiError } from "@etiennea20/adr-nest";
+
+const body: IApiError = {
+  type: "about:blank",
+  title: "Accès refusé",
+  status: 403,
+  code: "FORBIDDEN",
+};
+```
+
+### `IApiErrorIssue`
+
+| Champ          | Valeur                                   |
+| -------------- | ---------------------------------------- |
+| Catégorie      | `common`                                 |
+| Point d'entrée | `@etiennea20/adr-nest`                   |
+| Statut         | stable                                   |
+| Depuis         | 0.2.0                                    |
+| Source         | `src/common/api-error/api-error.ts`      |
+| Tests          | `src/common/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+interface IApiErrorIssue {
+  path: string;
+  message: string;
+  code?: string | undefined;
+}
+```
+
+**Description** : problème précis d'une erreur d'API : chemin du champ en notation pointée (`"items.0.title"`, `""` pour la racine), message, code facultatif. Même forme que `ApiErrorIssue` d'adr-misc.
+
+**Exemple**
+
+```ts
+import type { IApiErrorIssue } from "@etiennea20/adr-nest";
+
+const issue: IApiErrorIssue = {
+  path: "author.name",
+  message: "Champ requis",
+  code: "invalid_type",
+};
+```
+
+### `EApiErrorCode`
+
+| Champ          | Valeur                                   |
+| -------------- | ---------------------------------------- |
+| Catégorie      | `common`                                 |
+| Point d'entrée | `@etiennea20/adr-nest`                   |
+| Statut         | stable                                   |
+| Depuis         | 0.2.0                                    |
+| Source         | `src/common/api-error/api-error.ts`      |
+| Tests          | `src/common/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+const EApiErrorCode = {
+  BAD_REQUEST: "BAD_REQUEST",
+  VALIDATION_FAILED: "VALIDATION_FAILED",
+  INVALID_QUERY: "INVALID_QUERY",
+  QUERY_LIMIT_EXCEEDED: "QUERY_LIMIT_EXCEEDED",
+  UNAUTHENTICATED: "UNAUTHENTICATED",
+  FORBIDDEN: "FORBIDDEN",
+  NOT_FOUND: "NOT_FOUND",
+  CONFLICT: "CONFLICT",
+  EXPORT_LIMIT_EXCEEDED: "EXPORT_LIMIT_EXCEEDED",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
+} as const;
+type EApiErrorCode = (typeof EApiErrorCode)[keyof typeof EApiErrorCode];
+```
+
+**Description** : codes d'erreur stables du format d'erreur d'API, identiques à ceux de `@etiennea20/adr-misc/contract` (vérifié par un test) : reproduits pour que l'entrée principale ne dépende ni d'adr-misc ni de zod. Statuts usuels : 400 (`BAD_REQUEST`, `VALIDATION_FAILED`, `INVALID_QUERY`, `QUERY_LIMIT_EXCEEDED`, `EXPORT_LIMIT_EXCEEDED`), 401, 403, 404, 409, 500.
+
+**Exemple**
+
+```ts
+import { ApiException, EApiErrorCode } from "@etiennea20/adr-nest";
+
+throw new ApiException({ status: 409, code: EApiErrorCode.CONFLICT, title: "Livre déjà emprunté" });
+```
+
+### `API_ERROR_CONTENT_TYPE`
+
+| Champ          | Valeur                                   |
+| -------------- | ---------------------------------------- |
+| Catégorie      | `common`                                 |
+| Point d'entrée | `@etiennea20/adr-nest`                   |
+| Statut         | stable                                   |
+| Depuis         | 0.2.0                                    |
+| Source         | `src/common/api-error/api-error.ts`      |
+| Tests          | `src/common/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+const API_ERROR_CONTENT_TYPE: "application/problem+json";
+```
+
+**Description** : type de média d'une réponse d'erreur RFC 9457.
+
+**Exemple**
+
+```ts
+import { API_ERROR_CONTENT_TYPE } from "@etiennea20/adr-nest";
+
+response.type(API_ERROR_CONTENT_TYPE);
+```
+
+### `IStandardSchema`
+
+| Champ          | Valeur                                               |
+| -------------- | ---------------------------------------------------- |
+| Catégorie      | `common`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                               |
+| Statut         | stable                                               |
+| Depuis         | 0.2.0                                                |
+| Source         | `src/common/standard-schema/standard-schema.ts`      |
+| Tests          | `src/common/standard-schema/standard-schema.test.ts` |
+
+**Signature**
+
+```ts
+interface IStandardSchema<TInput = unknown, TOutput = TInput> {
+  readonly "~standard": {
+    readonly version: 1;
+    readonly vendor: string;
+    readonly validate: (
+      value: unknown,
+    ) => StandardSchemaResult<TOutput> | Promise<StandardSchemaResult<TOutput>>;
+    readonly types?: { readonly input: TInput; readonly output: TOutput } | undefined;
+  };
+}
+```
+
+**Description** : schéma compatible Standard Schema v1 (https://standardschema.dev), satisfait sans adaptateur par tout schéma zod 4 (et Valibot, ArkType…). Copie minimale de la spécification, pour ne pas dépendre de `@standard-schema/spec`.
+
+**Exemple**
+
+```ts
+import type { IStandardSchema } from "@etiennea20/adr-nest";
+import { z } from "zod";
+
+const schema: IStandardSchema<unknown, { title: string }> = z.object({ title: z.string() });
+```
+
+### `IStandardSchemaIssue`
+
+| Champ          | Valeur                                               |
+| -------------- | ---------------------------------------------------- |
+| Catégorie      | `common`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                               |
+| Statut         | stable                                               |
+| Depuis         | 0.2.0                                                |
+| Source         | `src/common/standard-schema/standard-schema.ts`      |
+| Tests          | `src/common/standard-schema/standard-schema.test.ts` |
+
+**Signature**
+
+```ts
+interface IStandardSchemaIssue {
+  readonly message: string;
+  readonly path?: readonly (PropertyKey | { readonly key: PropertyKey })[] | undefined;
+}
+```
+
+**Description** : problème renvoyé par un schéma Standard Schema : message et chemin de la valeur fautive.
+
+**Exemple**
+
+```ts
+import type { IStandardSchemaIssue } from "@etiennea20/adr-nest";
+
+const issue: IStandardSchemaIssue = { message: "Champ requis", path: ["author", "name"] };
+```
+
+### `StandardSchemaResult`
+
+| Champ          | Valeur                                               |
+| -------------- | ---------------------------------------------------- |
+| Catégorie      | `common`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                               |
+| Statut         | stable                                               |
+| Depuis         | 0.2.0                                                |
+| Source         | `src/common/standard-schema/standard-schema.ts`      |
+| Tests          | `src/common/standard-schema/standard-schema.test.ts` |
+
+**Signature**
+
+```ts
+type StandardSchemaResult<T> =
+  | { readonly value: T; readonly issues?: undefined }
+  | { readonly issues: readonly IStandardSchemaIssue[] };
+```
+
+**Description** : résultat de la validation d'un schéma Standard Schema : la valeur validée, ou les problèmes.
+
+**Exemple**
+
+```ts
+import type { StandardSchemaResult } from "@etiennea20/adr-nest";
+
+const result: StandardSchemaResult<string> = { value: "Dune" };
+```
+
+### `InferSchemaOutput`
+
+| Champ          | Valeur                                               |
+| -------------- | ---------------------------------------------------- |
+| Catégorie      | `common`                                             |
+| Point d'entrée | `@etiennea20/adr-nest`                               |
+| Statut         | stable                                               |
+| Depuis         | 0.2.0                                                |
+| Source         | `src/common/standard-schema/standard-schema.ts`      |
+| Tests          | `src/common/standard-schema/standard-schema.test.ts` |
+
+**Signature**
+
+```ts
+type InferSchemaOutput<S extends IStandardSchema> = NonNullable<S["~standard"]["types"]>["output"];
+```
+
+**Description** : type de sortie d'un schéma Standard Schema (valeur produite après validation).
+
+**Exemple**
+
+```ts
+import type { InferSchemaOutput } from "@etiennea20/adr-nest";
+
+type CreateBookInput = InferSchemaOutput<typeof createBookSchema>;
+```
 
 ## rights
 

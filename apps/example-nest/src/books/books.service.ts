@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 
 import type { IBook } from "./book";
+import type { CreateBookInput, UpdateBookInput } from "./book.schemas";
 import { BooksRepository } from "./books.repository";
 
 @Injectable()
@@ -13,6 +14,16 @@ export class BooksService {
 
   get(id: string): IBook {
     const book = this.repository.findById(id);
+    if (!book) throw new NotFoundException(`Livre « ${id} » introuvable.`);
+    return book;
+  }
+
+  create(input: CreateBookInput): IBook {
+    return this.repository.insert({ ...input, status: "available" });
+  }
+
+  update(id: string, input: UpdateBookInput): IBook {
+    const book = this.repository.update(id, input);
     if (!book) throw new NotFoundException(`Livre « ${id} » introuvable.`);
     return book;
   }

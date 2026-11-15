@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { Injectable } from "@nestjs/common";
 
 import { BOOKS, type IBook } from "./book";
@@ -17,5 +19,18 @@ export class BooksRepository {
   findById(id: string): IBook | undefined {
     const book = this.books.find((candidate) => candidate.id === id);
     return book && { ...book };
+  }
+
+  insert(book: Omit<IBook, "id">): IBook {
+    const created = { ...book, id: randomUUID() };
+    this.books.push(created);
+    return { ...created };
+  }
+
+  update(id: string, changes: Partial<Omit<IBook, "id">>): IBook | undefined {
+    const book = this.books.find((candidate) => candidate.id === id);
+    if (!book) return undefined;
+    Object.assign(book, changes);
+    return { ...book };
   }
 }

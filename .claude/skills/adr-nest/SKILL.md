@@ -15,12 +15,13 @@ décorateurs (`emitDecoratorMetadata`).
 
 - Point d'entrée unique : `@etiennea20/adr-nest`.
 - peerDependencies : `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs`.
-- Catégories : `core` (méthodes avancées NestJS), `rights` (gestion des droits), `filtering`
-  (filtrage avancé), `export` (export Excel et JSON).
+- Catégories : `common` (format d'erreur d'API, exceptions, validation, éléments
+  transverses), `rights` (gestion des droits), `filtering` (filtrage avancé), `export` (export
+  Excel et JSON).
 
 ## Catégories
 
-- `core` : méthodes avancées NestJS (aucun élément pour l'instant)
+- [common](reference.md#common) : format d'erreur d'API, exceptions et validation (`API_ERROR_CONTENT_TYPE`, `ApiException`, `apiValidationExceptionFactory`, `EApiErrorCode`, `IApiError`, `IApiErrorIssue`, `IApiExceptionOptions`, `InferSchemaOutput`, `IStandardSchema`, `IStandardSchemaIssue`, `IValidationExceptionOptions`, `SchemaValidationPipe`, `StandardSchemaResult`, `ValidationException`, `ValidBody`, `ValidQuery`)
 - [rights](reference.md#rights) : gestion des droits
   - [`Public`](reference.md#public)
   - [`IS_PUBLIC_KEY`](reference.md#is_public_key)

@@ -40,15 +40,19 @@ générée depuis le TSDoc.
   (`^0.2`), `rxjs` (`^7.8`). Les mêmes en devDependencies pour les tests.
 - Toute autre dépendance (par exemple une bibliothèque Excel pour la catégorie `export`) doit
   être demandée avant ajout, avec le choix dependency / peerDependency (optionnelle ?).
+- devDependencies de test : `zod` (schémas Standard Schema des tests) et `@etiennea20/adr-misc`
+  (test anti-divergence du format d'erreur). L'entrée principale n'importe **ni** zod **ni**
+  adr-misc : seuls les sous-chemins (filtrage) pourront le faire, en peerDependencies
+  optionnelles.
 
 ## Catégories
 
-| Dossier          | Contenu                                                            |
-| ---------------- | ------------------------------------------------------------------ |
-| `src/core/`      | Méthodes avancées NestJS : décorateurs, pipes, interceptors, utils |
-| `src/rights/`    | Gestion des droits : routes publiques, rôles, permissions, guards  |
-| `src/filtering/` | Filtrage avancé : parsing de query, critères, pagination, tri      |
-| `src/export/`    | Export Excel et JSON (services, interceptors, formats)             |
+| Dossier          | Contenu                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| `src/common/`    | Format d'erreur d'API, exceptions, validation, éléments transverses |
+| `src/rights/`    | Gestion des droits : routes publiques, rôles, permissions, guards   |
+| `src/filtering/` | Filtrage avancé : parsing de query, critères, pagination, tri       |
+| `src/export/`    | Export Excel et JSON (services, interceptors, formats)              |
 
 Une catégorie n'est réexportée par `src/index.ts` qu'avec son premier élément. Si une catégorie
 dépasse une quinzaine d'éléments, proposer de la diviser.
@@ -60,6 +64,17 @@ dépasse une quinzaine d'éléments, proposer de la diviser.
 - Décorateurs exportés en `PascalCase` (`Public()`), comme ceux de NestJS.
 - Un module dynamique exposé suit la convention `forRoot` / `forRootAsync`.
 - Les messages d'erreur levés (exceptions HTTP comprises) sont en français.
+
+## Validation et erreurs
+
+- Validation par schéma **Standard Schema** (`IStandardSchema`, copie minimale de la
+  spécification) : aucun import de zod dans le code du package. `SchemaValidationPipe`,
+  `ValidBody`, `ValidQuery` fonctionnent sous NestJS 11 et 12 ; sous 12,
+  `apiValidationExceptionFactory` branche le pipe natif sur le même format.
+- Toute erreur exposée au client suit le format d'erreur d'API (`ApiException`, RFC 9457 +
+  `code`). `EApiErrorCode`, `IApiError` et `API_ERROR_CONTENT_TYPE` reproduisent ceux
+  d'`@etiennea20/adr-misc/contract` : `src/common/api-error/api-error.test.ts` vérifie qu'ils
+  restent identiques. Modifier les deux ensemble.
 
 ## Tests
 

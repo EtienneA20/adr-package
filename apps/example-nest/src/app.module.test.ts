@@ -13,6 +13,10 @@ describe("AppModule", () => {
     const books = moduleRef.get(BooksController);
     expect(books.list()).toHaveLength(3);
     expect(books.get(BOOKS[0]?.id ?? "").title).toBe("Les Misérables");
+    expect(
+      books.create({ title: "Nana", authorName: "Zola", publishedAt: "1880-03-01" }).id,
+    ).toBeTruthy();
+    expect(books.update(BOOKS[1]?.id ?? "", { status: "available" }).status).toBe("available");
 
     await moduleRef.close();
   });
