@@ -24,8 +24,14 @@ serveur.
 
 - tsup, `platform: "neutral"`, sorties ESM (`dist/index.js`) + CJS (`dist/index.cjs`) + types
   (`.d.ts` / `.d.cts`). Pas de bannière `"use client"`.
-- Point d'entrée unique `@etiennea20/adr-misc` : pas de sous-chemin tant qu'aucune catégorie
-  n'a de dépendance propre.
+- Points d'entrée : `@etiennea20/adr-misc` (`src/index.ts`) et `@etiennea20/adr-misc/contract`
+  (`src/contract/index.ts`, seule catégorie qui dépend de zod).
+- **Règle des sous-chemins** (comme adr-react) : une catégorie qui importe une peerDependency
+  **optionnelle** a son propre sous-chemin et n'est **jamais** réexportée par `src/index.ts`.
+  Ajouter un sous-chemin = modifier **ensemble** `exports` (package.json), `entry` et
+  `external` (tsup.config.ts), `optionalPeers` (eslint.config.js), `entryPoints` du plugin
+  typedoc (`apps/docs/docusaurus.config.ts`), ce fichier et `SKILLS.md`. Demander avant d'en
+  créer un.
 
 ## dayjs
 
@@ -36,6 +42,20 @@ serveur.
   s'appliqueraient pas à nos fonctions, et inversement.
 - Une fonction qui a besoin d'un plugin l'active elle-même (`dayjs.extend` est idempotent) et le
   documente dans son TSDoc (`@remarks`).
+
+## zod (sous-chemin `contract`)
+
+- `zod` est une peerDependency **optionnelle** (`^4.0.0`, `peerDependenciesMeta`), en
+  devDependency via le `catalog` pour les tests, `external` dans tsup. Seul `src/contract/**`
+  peut l'importer (ESLint `optionalPeers`).
+- Raison (comme dayjs) : une seule instance de zod partagée avec le projet, qui porte sa
+  configuration globale (`z.config(z.locales.fr())`) ; aucun coût pour qui n'utilise que
+  l'entrée principale.
+- Import depuis `"zod"` (API classique de zod 4). Les messages propres au contrat (liste
+  blanche, limites) sont en français ; les messages génériques de zod suivent la locale
+  configurée par le projet.
+- Un dépassement de limite porte `params.code = EApiErrorCode.QUERY_LIMIT_EXCEEDED` sur le
+  problème zod : le serveur en déduit le code d'erreur d'API.
 
 ## Catégories
 
@@ -60,12 +80,14 @@ serveur.
 | `src/url/`        | Query strings et assemblage d'URL (sans `URL`, absent de la lib ES2022)    |
 | `src/file/`       | Noms de fichiers et types MIME (aucune API de système de fichiers)         |
 | `src/color/`      | Couleurs hexadécimales, mélange, contraste WCAG                            |
+| `src/contract/`   | Contrat de liste (zod) et format d'erreur d'API, sous-chemin `./contract`  |
 
 Une catégorie n'est créée (dossier + `index.ts` + réexport dans `src/index.ts`) qu'avec son
 premier élément. Si une catégorie dépasse une quinzaine d'éléments, proposer de la diviser.
 
 - **Aucun import entre catégories** (sauf besoin réel, à justifier) : chaque catégorie reste
-  autonome et lisible seule.
+  autonome et lisible seule. Exception justifiée : `contract` réutilise `ESortDirection`
+  (`enums`) pour garder une seule valeur de sens de tri.
 - Les globales communes au navigateur et à Node mais absentes de la lib ES2022 (minuteries,
   `crypto`) passent par un helper privé typé sur `globalThis` (`src/async/timers/`,
   `src/random/crypto/`), lu à chaque appel pour rester compatible avec `vi.useFakeTimers()`.

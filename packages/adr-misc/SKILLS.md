@@ -6,8 +6,10 @@ description: >-
   types utilitaires, fonctions asynchrones (retry, debounce, timeout), tableaux, objets, chaînes
   et casse, calculs, aléatoire, parsing (nombres, dates avec dayjs, durées, CSV), formatage
   français, dates (jours fériés, jours ouvrés), énumérations, validation (email, SIRET, IBAN,
-  NIR), URL, fichiers et couleurs. Donne l'inventaire des fonctions, types et énumérations
-  publics, leur signature, leurs erreurs et un exemple d'utilisation.
+  NIR), URL, fichiers et couleurs ; sous-chemin /contract (zod) : contrat de liste partagé front
+  / back (filtre, tri, pagination, sélection de champs) et format d'erreur d'API RFC 9457.
+  Donne l'inventaire des fonctions, types et énumérations publics, leur signature, leurs
+  erreurs et un exemple d'utilisation.
 ---
 
 # SKILLS : @etiennea20/adr-misc
@@ -17,7 +19,9 @@ description: >-
 Utilitaires sans dépendance d'environnement, utilisables dans le navigateur comme dans Node
 (ESM et CJS). Aucune dépendance React ni NestJS.
 
-- Point d'entrée unique : `@etiennea20/adr-misc`.
+- Points d'entrée : `@etiennea20/adr-misc` (tout sauf `contract`) et
+  `@etiennea20/adr-misc/contract` (contrat de liste et format d'erreur d'API ; exige `zod` ≥ 4,
+  peerDependency optionnelle).
 - `dayjs` est une peerDependency : le projet consommateur l'installe et configure ses plugins
   (`dayjs.extend`) une seule fois ; les fonctions du package utilisent cette même instance.
 - Conventions : fonctions pures et immuables, formats français par défaut (`fr-FR`, `EUR`,
@@ -45,6 +49,7 @@ Utilitaires sans dépendance d'environnement, utilisables dans le navigateur com
 - [url](#url) : URL et query strings (`buildQueryString`, `buildUrl`, `getUrlParts`, `IBuildQueryStringOptions`, `isAbsoluteUrl`, `IUrlParts`, `joinUrl`, `ParsedQueryString`, `parseQueryString`, `QueryParams`, `QueryParamValue`)
 - [file](#file) : noms de fichiers et types MIME (`changeFileExtension`, `getFileBaseName`, `getFileExtension`, `getFileName`, `getMimeType`, `ISanitizeFileNameOptions`, `isImageFile`, `sanitizeFileName`)
 - [color](#color) : couleurs et contraste (`darkenColor`, `getContrastRatio`, `getLuminance`, `getReadableTextColor`, `hexToRgb`, `IReadableTextColorOptions`, `IRgbColor`, `IStringToColorOptions`, `lightenColor`, `mixColors`, `rgbToHex`, `stringToColor`, `withAlpha`)
+- [contract](#contract) : contrat de liste et format d'erreur d'API, sous-chemin `/contract` (`API_ERROR_CONTENT_TYPE`, `ApiError`, `ApiErrorIssue`, `apiErrorIssueSchema`, `apiErrorSchema`, `DEFAULT_LIST_QUERY_LIMITS`, `defineListQuery`, `EApiErrorCode`, `EFieldType`, `EFilterOperator`, `FIELD_TYPE_OPERATORS`, `FieldDefinitions`, `FilterableField`, `FilterNode`, `FilterScalar`, `FilterValue`, `IFieldDefinition`, `IFilterAndGroup`, `IFilterCondition`, `IFilterNotGroup`, `IFilterOrGroup`, `IListQuery`, `IListQueryDefaults`, `IListQueryDefinition`, `IListQueryLimits`, `IListQueryOptions`, `IPage`, `IResolvedField`, `isFilterCondition`, `ISortItem`, `ListQueryInput`, `pageSchema`, `SelectableField`, `SortableField`, `toListQuerySearchParams`)
 
 ## core
 
@@ -10028,4 +10033,1181 @@ import { withAlpha } from "@etiennea20/adr-misc";
 
 withAlpha("#2563eb", 0.5); // "#2563eb80"
 withAlpha("#2563eb80", 1); // "#2563eb"
+```
+
+## contract
+
+Point d'entrée `@etiennea20/adr-misc/contract` (peerDependency optionnelle `zod` ≥ 4) : contrat de liste partagé
+front / back (filtre, recherche, tri, pagination, sélection de champs) et format d'erreur d'API
+(RFC 9457). Jamais réexporté par `@etiennea20/adr-misc`.
+
+### `defineListQuery`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/list-query/list-query.ts`      |
+| Tests          | `src/contract/list-query/list-query.test.ts` |
+
+**Signature**
+
+```ts
+function defineListQuery<const T extends FieldDefinitions>(
+  options: IListQueryOptions<T>,
+): IListQueryDefinition<T>;
+```
+
+**Description** : définit le contrat d'une liste paginée : champs exposés (liste blanche) et ce que le client peut en faire (filtrer, trier, sélectionner, rechercher), limites et valeurs par défaut. À déclarer une seule fois dans le code partagé entre front et API. Le front valide ses paramètres d'URL avec `schema` (TanStack Router `validateSearch`, react-hook-form) et les encode avec `toListQuerySearchParams` ; le serveur valide `req.query` avec `searchParamsSchema` (un paramètre par clé, en JSON) ou le corps de `POST /search` avec `schema`. Tout est refusé par défaut. Le filtre est un arbre de conditions `{ field, op, value }` combinées par `{ and }`, `{ or }`, `{ not }`, strict (clé inconnue refusée), borné en profondeur et en nombre de conditions (dépassement : problème zod portant `params.code = "QUERY_LIMIT_EXCEEDED"`). Les clés inconnues du premier niveau sont ignorées. Valeurs par défaut : page 1, taille 20 (au plus `maxPageSize`), `withTotal: true`, tri vide. `contains`, `startsWith`, `endsWith` sont insensibles à la casse sauf `caseSensitive: true`. `q` est une recherche globale (contient, OU sur les champs `search: true`) ; vide, elle est ignorée.
+
+**Paramètres**
+
+- `options.fields` : définitions des champs (`IFieldDefinition`), indexées par nom public (identifiant ou relation à un niveau `author.name`).
+- `options.defaults` : tri, taille de page et comptage par défaut (`IListQueryDefaults`).
+- `options.limits` : surcharge partielle de `DEFAULT_LIST_QUERY_LIMITS`.
+
+**Retour** : `IListQueryDefinition<T>` (objet figé) : `fields` résolus, `limits`, `defaults`, `schema` et `searchParamsSchema`.
+
+**Erreurs** : `RangeError` si la définition est invalide : aucun champ, nom invalide ou réservé (`__proto__`), relation à plus d'un niveau, type inconnu, `values` manquant (enum) ou superflu, opérateur incompatible avec le type, `search` sur un champ non textuel, limite non entière positive, taille de page ou tri par défaut incohérents.
+
+**Exemple**
+
+```ts
+import { defineListQuery } from "@etiennea20/adr-misc/contract";
+import type { z } from "zod";
+
+export const bookListQuery = defineListQuery({
+  fields: {
+    id: { type: "uuid", filter: ["eq", "in"], select: true },
+    title: { type: "string", filter: true, sort: true, select: true, search: true },
+    status: { type: "enum", values: ["available", "loaned"], filter: true, select: true },
+    publishedAt: { type: "date", filter: true, sort: true, select: true },
+    "author.name": { type: "string", filter: ["eq", "contains"], sort: true, search: true },
+  },
+  defaults: { sort: [{ field: "title", direction: "asc" }], pageSize: 20 },
+  limits: { maxDepth: 4, maxConditions: 50 },
+});
+export type BookListQuery = z.infer<typeof bookListQuery.schema>;
+
+bookListQuery.schema.parse({
+  filter: {
+    or: [
+      { field: "status", op: "eq", value: "available" },
+      { not: { field: "title", op: "contains", value: "tome" } },
+    ],
+  },
+  sort: [{ field: "publishedAt", direction: "desc" }],
+});
+bookListQuery.searchParamsSchema.parse({ q: "dune", page: "2" }); // côté serveur (req.query)
+```
+
+### `IListQueryOptions`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/list-query/list-query.ts`      |
+| Tests          | `src/contract/list-query/list-query.test.ts` |
+
+**Signature**
+
+```ts
+interface IListQueryOptions<T extends FieldDefinitions> {
+  readonly fields: T;
+  readonly defaults?: IListQueryDefaults<SortableField<T>>;
+  readonly limits?: Partial<IListQueryLimits>;
+}
+```
+
+**Description** : options de `defineListQuery` : champs (liste blanche), valeurs par défaut et surcharge des limites.
+
+**Exemple**
+
+```ts
+import type { IListQueryOptions } from "@etiennea20/adr-misc/contract";
+
+const options: IListQueryOptions<typeof bookFields> = {
+  fields: bookFields,
+  limits: { maxDepth: 4 },
+};
+```
+
+### `IListQueryDefaults`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/list-query/list-query.ts`      |
+| Tests          | `src/contract/list-query/list-query.test.ts` |
+
+**Signature**
+
+```ts
+interface IListQueryDefaults<F extends string = string> {
+  readonly sort?: readonly ISortItem<F>[];
+  readonly pageSize?: number;
+  readonly withTotal?: boolean;
+}
+```
+
+**Description** : valeurs appliquées quand la requête ne les précise pas : tri (aucun par défaut), taille de page (20, au plus `maxPageSize`), calcul du total (`true`). Le tri par défaut ne contient que des champs triables distincts.
+
+**Exemple**
+
+```ts
+import type { IListQueryDefaults } from "@etiennea20/adr-misc/contract";
+
+const defaults: IListQueryDefaults<"title"> = {
+  sort: [{ field: "title", direction: "asc" }],
+  withTotal: false,
+};
+```
+
+### `IListQueryDefinition`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/list-query/list-query.ts`      |
+| Tests          | `src/contract/list-query/list-query.test.ts` |
+
+**Signature**
+
+```ts
+interface IListQueryDefinition<T extends FieldDefinitions = FieldDefinitions> {
+  readonly fields: Readonly<Record<keyof T & string, IResolvedField>>;
+  readonly limits: Readonly<IListQueryLimits>;
+  readonly defaults: Readonly<Required<IListQueryDefaults<SortableField<T>>>>;
+  readonly schema: z.ZodType<IListQuery<T>, ListQueryInput<T>>;
+  readonly searchParamsSchema: z.ZodType<IListQuery<T>, Readonly<Record<string, unknown>>>;
+}
+```
+
+**Description** : contrat renvoyé par `defineListQuery`. `schema` valide la requête sous forme d'objet (corps de `POST /search`, `validateSearch` de TanStack Router) ; `searchParamsSchema` valide l'objet des paramètres d'URL (`req.query`) : chaque paramètre est borné en longueur (`maxParamLength`) avant `JSON.parse`, lu en JSON si possible sinon en texte brut ; un paramètre répété ou imbriqué est refusé. `fields` sert à construire l'interface de filtre côté front. Les deux schémas sont des Standard Schema (NestJS 12, react-hook-form, TanStack Router).
+
+**Exemple**
+
+```ts
+import type { z } from "zod";
+
+type BookListQuery = z.infer<typeof bookListQuery.schema>;
+const operators = bookListQuery.fields.title.operators;
+```
+
+### `IListQuery`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/list-query/list-query.ts`      |
+| Tests          | `src/contract/list-query/list-query.test.ts` |
+
+**Signature**
+
+```ts
+interface IListQuery<T extends FieldDefinitions = FieldDefinitions> {
+  filter?: FilterNode<FilterableField<T>> | undefined;
+  q?: string | undefined;
+  sort: ISortItem<SortableField<T>>[];
+  page: number;
+  pageSize: number;
+  fields?: SelectableField<T>[] | undefined;
+  withTotal: boolean;
+}
+```
+
+**Description** : requête de liste validée, valeurs par défaut appliquées (sortie de `schema` et `searchParamsSchema`). Les noms de champs sont typés à partir des définitions. Le serveur l'interprète (conversion en conditions d'ORM) ; elle ne contient jamais de requête brute.
+
+**Exemple**
+
+```ts
+import type { IListQuery } from "@etiennea20/adr-misc/contract";
+
+function offsetOf(query: IListQuery): number {
+  return (query.page - 1) * query.pageSize;
+}
+```
+
+### `ListQueryInput`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/list-query/list-query.ts`      |
+| Tests          | `src/contract/list-query/list-query.test.ts` |
+
+**Signature**
+
+```ts
+type ListQueryInput<T extends FieldDefinitions = FieldDefinitions> = Partial<IListQuery<T>>;
+```
+
+**Description** : requête de liste avant validation (entrée de `schema`), toutes les clés facultatives. À utiliser côté front pour construire la requête à encoder.
+
+**Exemple**
+
+```ts
+import type { ListQueryInput } from "@etiennea20/adr-misc/contract";
+
+const input: ListQueryInput<typeof bookFields> = { q: "dune", page: 2 };
+```
+
+### `ISortItem`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/list-query/list-query.ts`      |
+| Tests          | `src/contract/list-query/list-query.test.ts` |
+
+**Signature**
+
+```ts
+interface ISortItem<F extends string = string> {
+  readonly field: F;
+  readonly direction: ESortDirection;
+}
+```
+
+**Description** : critère de tri : champ triable et sens (`ESortDirection` de `@etiennea20/adr-misc`). Les critères s'appliquent dans l'ordre du tableau ; un champ n'y figure qu'une fois.
+
+**Exemple**
+
+```ts
+import type { ISortItem } from "@etiennea20/adr-misc/contract";
+
+const sort: ISortItem<"title">[] = [{ field: "title", direction: "asc" }];
+```
+
+### `IFieldDefinition`
+
+| Champ          | Valeur                                                   |
+| -------------- | -------------------------------------------------------- |
+| Catégorie      | `contract`                                               |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                          |
+| Statut         | stable                                                   |
+| Depuis         | 0.3.0                                                    |
+| Source         | `src/contract/field-definition/field-definition.ts`      |
+| Tests          | `src/contract/field-definition/field-definition.test.ts` |
+
+**Signature**
+
+```ts
+interface IFieldDefinition {
+  readonly type: EFieldType;
+  readonly values?: readonly string[];
+  readonly filter?: boolean | readonly EFilterOperator[];
+  readonly sort?: boolean;
+  readonly select?: boolean;
+  readonly search?: boolean;
+}
+```
+
+**Description** : définition d'un champ du contrat ; tout est refusé par défaut. `values` est obligatoire pour `enum` et interdit sinon ; `filter: true` donne tous les opérateurs du type (`FIELD_TYPE_OPERATORS`), une liste restreint à ces opérateurs ; `search` est réservé au type `string`.
+
+**Exemple**
+
+```ts
+import type { IFieldDefinition } from "@etiennea20/adr-misc/contract";
+
+const status: IFieldDefinition = {
+  type: "enum",
+  values: ["available", "loaned"],
+  filter: ["eq", "in"],
+};
+```
+
+### `FieldDefinitions`
+
+| Champ          | Valeur                                                   |
+| -------------- | -------------------------------------------------------- |
+| Catégorie      | `contract`                                               |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                          |
+| Statut         | stable                                                   |
+| Depuis         | 0.3.0                                                    |
+| Source         | `src/contract/field-definition/field-definition.ts`      |
+| Tests          | `src/contract/field-definition/field-definition.test.ts` |
+
+**Signature**
+
+```ts
+type FieldDefinitions = Readonly<Record<string, IFieldDefinition>>;
+```
+
+**Description** : définitions des champs d'un contrat, indexées par nom public (identifiant, ou chemin de relation à un niveau `author.name`).
+
+**Exemple**
+
+```ts
+import type { FieldDefinitions } from "@etiennea20/adr-misc/contract";
+
+const bookFields = { title: { type: "string", sort: true } } as const satisfies FieldDefinitions;
+```
+
+### `IResolvedField`
+
+| Champ          | Valeur                                                   |
+| -------------- | -------------------------------------------------------- |
+| Catégorie      | `contract`                                               |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                          |
+| Statut         | stable                                                   |
+| Depuis         | 0.3.0                                                    |
+| Source         | `src/contract/field-definition/field-definition.ts`      |
+| Tests          | `src/contract/field-definition/field-definition.test.ts` |
+
+**Signature**
+
+```ts
+interface IResolvedField {
+  readonly name: string;
+  readonly type: EFieldType;
+  readonly values?: readonly string[] | undefined;
+  readonly operators: readonly EFilterOperator[];
+  readonly sortable: boolean;
+  readonly selectable: boolean;
+  readonly searchable: boolean;
+}
+```
+
+**Description** : champ après validation de sa définition (`IListQueryDefinition.fields`) : capacités explicites, opérateurs effectifs (vide si non filtrable). À utiliser côté front pour construire l'interface de filtre et de tri.
+
+**Exemple**
+
+```ts
+const sortable = Object.values(bookListQuery.fields).filter((field) => field.sortable);
+```
+
+### `FilterableField`
+
+| Champ          | Valeur                                                   |
+| -------------- | -------------------------------------------------------- |
+| Catégorie      | `contract`                                               |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                          |
+| Statut         | stable                                                   |
+| Depuis         | 0.3.0                                                    |
+| Source         | `src/contract/field-definition/field-definition.ts`      |
+| Tests          | `src/contract/field-definition/field-definition.test.ts` |
+
+**Signature**
+
+```ts
+type FilterableField<T extends FieldDefinitions> = {
+  [K in keyof T]: T[K]["filter"] extends true | readonly EFilterOperator[] ? K : never;
+}[keyof T] &
+  string;
+```
+
+**Description** : noms des champs filtrables (`filter: true` ou liste d'opérateurs) d'un ensemble de définitions.
+
+**Exemple**
+
+```ts
+import type { FilterableField } from "@etiennea20/adr-misc/contract";
+
+type BookFilterField = FilterableField<typeof bookFields>;
+```
+
+### `SortableField`
+
+| Champ          | Valeur                                                   |
+| -------------- | -------------------------------------------------------- |
+| Catégorie      | `contract`                                               |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                          |
+| Statut         | stable                                                   |
+| Depuis         | 0.3.0                                                    |
+| Source         | `src/contract/field-definition/field-definition.ts`      |
+| Tests          | `src/contract/field-definition/field-definition.test.ts` |
+
+**Signature**
+
+```ts
+type SortableField<T extends FieldDefinitions> = {
+  [K in keyof T]: T[K]["sort"] extends true ? K : never;
+}[keyof T] &
+  string;
+```
+
+**Description** : noms des champs triables (`sort: true`) d'un ensemble de définitions.
+
+**Exemple**
+
+```ts
+import type { SortableField } from "@etiennea20/adr-misc/contract";
+
+type BookSortField = SortableField<typeof bookFields>;
+```
+
+### `SelectableField`
+
+| Champ          | Valeur                                                   |
+| -------------- | -------------------------------------------------------- |
+| Catégorie      | `contract`                                               |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                          |
+| Statut         | stable                                                   |
+| Depuis         | 0.3.0                                                    |
+| Source         | `src/contract/field-definition/field-definition.ts`      |
+| Tests          | `src/contract/field-definition/field-definition.test.ts` |
+
+**Signature**
+
+```ts
+type SelectableField<T extends FieldDefinitions> = {
+  [K in keyof T]: T[K]["select"] extends true ? K : never;
+}[keyof T] &
+  string;
+```
+
+**Description** : noms des champs sélectionnables (`select: true`, `never` si aucun) d'un ensemble de définitions.
+
+**Exemple**
+
+```ts
+import type { SelectableField } from "@etiennea20/adr-misc/contract";
+
+type BookSelectField = SelectableField<typeof bookFields>;
+```
+
+### `EFieldType`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/field-type/field-type.ts`      |
+| Tests          | `src/contract/field-type/field-type.test.ts` |
+
+**Signature**
+
+```ts
+const EFieldType = {
+  STRING: "string",
+  NUMBER: "number",
+  DATE: "date",
+  BOOLEAN: "boolean",
+  ENUM: "enum",
+  UUID: "uuid",
+} as const;
+type EFieldType = (typeof EFieldType)[keyof typeof EFieldType];
+```
+
+**Description** : types de champ du contrat ; ils fixent le format JSON des valeurs de filtre et les opérateurs permis. `date` : texte ISO 8601 (`2026-01-31`, ou `2026-01-31T10:00:00Z` avec fuseau obligatoire) ; `uuid` : texte UUID ; `number` : nombre fini.
+
+**Exemple**
+
+```ts
+import { EFieldType } from "@etiennea20/adr-misc/contract";
+
+const fields = { title: { type: EFieldType.STRING, filter: true } };
+```
+
+### `FIELD_TYPE_OPERATORS`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `contract`                                   |
+| Point d'entrée | `@etiennea20/adr-misc/contract`              |
+| Statut         | stable                                       |
+| Depuis         | 0.3.0                                        |
+| Source         | `src/contract/field-type/field-type.ts`      |
+| Tests          | `src/contract/field-type/field-type.test.ts` |
+
+**Signature**
+
+```ts
+const FIELD_TYPE_OPERATORS: Readonly<Record<EFieldType, readonly EFilterOperator[]>>;
+```
+
+**Description** : opérateurs permis par type de champ (ceux de `filter: true`). `string` : `eq ne in nin contains startsWith endsWith isNull` ; `number` et `date` : `eq ne gt gte lt lte between in nin isNull` ; `boolean` : `eq ne isNull` ; `enum` et `uuid` : `eq ne in nin isNull`.
+
+**Exemple**
+
+```ts
+import { FIELD_TYPE_OPERATORS } from "@etiennea20/adr-misc/contract";
+
+FIELD_TYPE_OPERATORS.boolean; // ["eq", "ne", "isNull"]
+```
+
+### `EFilterOperator`
+
+| Champ          | Valeur                                                 |
+| -------------- | ------------------------------------------------------ |
+| Catégorie      | `contract`                                             |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                        |
+| Statut         | stable                                                 |
+| Depuis         | 0.3.0                                                  |
+| Source         | `src/contract/filter-operator/filter-operator.ts`      |
+| Tests          | `src/contract/filter-operator/filter-operator.test.ts` |
+
+**Signature**
+
+```ts
+const EFilterOperator = {
+  EQ: "eq",
+  NE: "ne",
+  GT: "gt",
+  GTE: "gte",
+  LT: "lt",
+  LTE: "lte",
+  BETWEEN: "between",
+  IN: "in",
+  NIN: "nin",
+  CONTAINS: "contains",
+  STARTS_WITH: "startsWith",
+  ENDS_WITH: "endsWith",
+  IS_NULL: "isNull",
+} as const;
+type EFilterOperator = (typeof EFilterOperator)[keyof typeof EFilterOperator];
+```
+
+**Description** : opérateurs d'une condition de filtre. Valeur attendue : une valeur du type du champ (`eq` à `lte`), un couple `[min, max]` ordonné, bornes incluses (`between`), une liste non vide bornée par `maxInValues` (`in`, `nin`), un texte non vide (`contains`, `startsWith`, `endsWith`, insensibles à la casse sauf `caseSensitive: true`), un booléen (`isNull` : `true` = valeur absente).
+
+**Exemple**
+
+```ts
+import { EFilterOperator } from "@etiennea20/adr-misc/contract";
+
+const condition = { field: "title", op: EFilterOperator.CONTAINS, value: "dune" };
+```
+
+### `FilterNode`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `contract`                                     |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                |
+| Statut         | stable                                         |
+| Depuis         | 0.3.0                                          |
+| Source         | `src/contract/filter-node/filter-node.ts`      |
+| Tests          | `src/contract/filter-node/filter-node.test.ts` |
+
+**Signature**
+
+```ts
+type FilterNode<F extends string = string> =
+  IFilterCondition<F> | IFilterAndGroup<F> | IFilterOrGroup<F> | IFilterNotGroup<F>;
+```
+
+**Description** : nœud de l'arbre de filtre : une condition ou un groupe `and`, `or` ou `not`. Profondeur (groupes imbriqués ; une condition seule vaut 0) et nombre de conditions bornés par `IListQueryLimits`.
+
+**Exemple**
+
+```ts
+import type { FilterNode } from "@etiennea20/adr-misc/contract";
+
+const filter: FilterNode<"status" | "title"> = {
+  or: [
+    { field: "status", op: "eq", value: "available" },
+    { not: { field: "title", op: "startsWith", value: "Le" } },
+  ],
+};
+```
+
+### `IFilterCondition`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `contract`                                     |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                |
+| Statut         | stable                                         |
+| Depuis         | 0.3.0                                          |
+| Source         | `src/contract/filter-node/filter-node.ts`      |
+| Tests          | `src/contract/filter-node/filter-node.test.ts` |
+
+**Signature**
+
+```ts
+interface IFilterCondition<F extends string = string> {
+  readonly field: F;
+  readonly op: EFilterOperator;
+  readonly value: FilterValue;
+  readonly caseSensitive?: boolean | undefined;
+}
+```
+
+**Description** : condition d'un filtre. `caseSensitive` ne s'applique qu'à `contains`, `startsWith` et `endsWith` (refusé sur les autres opérateurs).
+
+**Exemple**
+
+```ts
+import type { IFilterCondition } from "@etiennea20/adr-misc/contract";
+
+const condition: IFilterCondition<"title"> = { field: "title", op: "contains", value: "Dune" };
+```
+
+### `IFilterAndGroup`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `contract`                                     |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                |
+| Statut         | stable                                         |
+| Depuis         | 0.3.0                                          |
+| Source         | `src/contract/filter-node/filter-node.ts`      |
+| Tests          | `src/contract/filter-node/filter-node.test.ts` |
+
+**Signature**
+
+```ts
+interface IFilterAndGroup<F extends string = string> {
+  readonly and: readonly FilterNode<F>[];
+}
+```
+
+**Description** : groupe « ET » (au moins un nœud) : vrai si tous ses nœuds sont vrais.
+
+**Exemple**
+
+```ts
+import type { IFilterAndGroup } from "@etiennea20/adr-misc/contract";
+
+const group: IFilterAndGroup = { and: [conditionA, conditionB] };
+```
+
+### `IFilterOrGroup`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `contract`                                     |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                |
+| Statut         | stable                                         |
+| Depuis         | 0.3.0                                          |
+| Source         | `src/contract/filter-node/filter-node.ts`      |
+| Tests          | `src/contract/filter-node/filter-node.test.ts` |
+
+**Signature**
+
+```ts
+interface IFilterOrGroup<F extends string = string> {
+  readonly or: readonly FilterNode<F>[];
+}
+```
+
+**Description** : groupe « OU » (au moins un nœud) : vrai si au moins un de ses nœuds est vrai.
+
+**Exemple**
+
+```ts
+import type { IFilterOrGroup } from "@etiennea20/adr-misc/contract";
+
+const group: IFilterOrGroup = { or: [conditionA, conditionB] };
+```
+
+### `IFilterNotGroup`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `contract`                                     |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                |
+| Statut         | stable                                         |
+| Depuis         | 0.3.0                                          |
+| Source         | `src/contract/filter-node/filter-node.ts`      |
+| Tests          | `src/contract/filter-node/filter-node.test.ts` |
+
+**Signature**
+
+```ts
+interface IFilterNotGroup<F extends string = string> {
+  readonly not: FilterNode<F>;
+}
+```
+
+**Description** : négation d'un nœud (condition ou groupe) ; compte comme un niveau de profondeur.
+
+**Exemple**
+
+```ts
+import type { IFilterNotGroup } from "@etiennea20/adr-misc/contract";
+
+const group: IFilterNotGroup = { not: { or: [conditionA, conditionB] } };
+```
+
+### `FilterValue`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `contract`                                     |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                |
+| Statut         | stable                                         |
+| Depuis         | 0.3.0                                          |
+| Source         | `src/contract/filter-node/filter-node.ts`      |
+| Tests          | `src/contract/filter-node/filter-node.test.ts` |
+
+**Signature**
+
+```ts
+type FilterValue = FilterScalar | readonly FilterScalar[];
+```
+
+**Description** : valeur d'une condition : valeur simple, couple `[min, max]` (`between`) ou liste (`in`, `nin`). Le format exact dépend de l'opérateur et du type du champ, vérifiés à la validation.
+
+**Exemple**
+
+```ts
+import type { FilterValue } from "@etiennea20/adr-misc/contract";
+
+const value: FilterValue = ["available", "reserved"];
+```
+
+### `FilterScalar`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `contract`                                     |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                |
+| Statut         | stable                                         |
+| Depuis         | 0.3.0                                          |
+| Source         | `src/contract/filter-node/filter-node.ts`      |
+| Tests          | `src/contract/filter-node/filter-node.test.ts` |
+
+**Signature**
+
+```ts
+type FilterScalar = string | number | boolean;
+```
+
+**Description** : valeur simple d'une condition (format JSON) ; dates et UUID circulent en texte.
+
+**Exemple**
+
+```ts
+import type { FilterScalar } from "@etiennea20/adr-misc/contract";
+
+const value: FilterScalar = "2026-01-31";
+```
+
+### `isFilterCondition`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `contract`                                     |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                |
+| Statut         | stable                                         |
+| Depuis         | 0.3.0                                          |
+| Source         | `src/contract/filter-node/filter-node.ts`      |
+| Tests          | `src/contract/filter-node/filter-node.test.ts` |
+
+**Signature**
+
+```ts
+function isFilterCondition<F extends string>(node: FilterNode<F>): node is IFilterCondition<F>;
+```
+
+**Description** : indique si un nœud de filtre est une condition (et non un groupe). À utiliser pour parcourir un arbre déjà validé (conversion vers un ORM, affichage des filtres actifs).
+
+**Paramètres**
+
+- `node` : nœud à tester.
+
+**Retour** : `true` si le nœud est une condition `{ field, op, value }`.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { type FilterNode, isFilterCondition } from "@etiennea20/adr-misc/contract";
+
+function fieldsOf(node: FilterNode): string[] {
+  if (isFilterCondition(node)) return [node.field];
+  if ("not" in node) return fieldsOf(node.not);
+  return ("and" in node ? node.and : node.or).flatMap(fieldsOf);
+}
+```
+
+### `IListQueryLimits`
+
+| Champ          | Valeur                                                     |
+| -------------- | ---------------------------------------------------------- |
+| Catégorie      | `contract`                                                 |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                            |
+| Statut         | stable                                                     |
+| Depuis         | 0.3.0                                                      |
+| Source         | `src/contract/list-query-limits/list-query-limits.ts`      |
+| Tests          | `src/contract/list-query-limits/list-query-limits.test.ts` |
+
+**Signature**
+
+```ts
+interface IListQueryLimits {
+  readonly maxDepth: number;
+  readonly maxConditions: number;
+  readonly maxInValues: number;
+  readonly maxStringLength: number;
+  readonly maxPageSize: number;
+  readonly maxSortFields: number;
+  readonly maxSearchLength: number;
+  readonly maxParamLength: number;
+}
+```
+
+**Description** : limites d'un contrat de liste (entiers strictement positifs), vérifiées à la validation pour protéger le serveur des requêtes coûteuses. `maxDepth` compte les groupes imbriqués ; `maxParamLength` borne chaque paramètre d'URL avant `JSON.parse`.
+
+**Exemple**
+
+```ts
+import type { IListQueryLimits } from "@etiennea20/adr-misc/contract";
+
+const limits: Partial<IListQueryLimits> = { maxDepth: 4, maxConditions: 50 };
+```
+
+### `DEFAULT_LIST_QUERY_LIMITS`
+
+| Champ          | Valeur                                                     |
+| -------------- | ---------------------------------------------------------- |
+| Catégorie      | `contract`                                                 |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                            |
+| Statut         | stable                                                     |
+| Depuis         | 0.3.0                                                      |
+| Source         | `src/contract/list-query-limits/list-query-limits.ts`      |
+| Tests          | `src/contract/list-query-limits/list-query-limits.test.ts` |
+
+**Signature**
+
+```ts
+const DEFAULT_LIST_QUERY_LIMITS: Readonly<IListQueryLimits>;
+```
+
+**Description** : limites par défaut (objet figé) : profondeur 3, 20 conditions, 100 valeurs par liste, 255 caractères par texte, pages de 100 éléments, 3 champs de tri, recherche de 100 caractères, paramètres d'URL de 4 096 caractères.
+
+**Exemple**
+
+```ts
+import { DEFAULT_LIST_QUERY_LIMITS, defineListQuery } from "@etiennea20/adr-misc/contract";
+
+defineListQuery({
+  fields,
+  limits: { maxConditions: DEFAULT_LIST_QUERY_LIMITS.maxConditions * 2 },
+});
+```
+
+### `toListQuerySearchParams`
+
+| Champ          | Valeur                                             |
+| -------------- | -------------------------------------------------- |
+| Catégorie      | `contract`                                         |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                    |
+| Statut         | stable                                             |
+| Depuis         | 0.3.0                                              |
+| Source         | `src/contract/search-params/search-params.ts`      |
+| Tests          | `src/contract/search-params/search-params.test.ts` |
+
+**Signature**
+
+```ts
+function toListQuerySearchParams(query: object): Record<string, string>;
+```
+
+**Description** : encode une requête de liste en paramètres d'URL, un paramètre par clé : texte brut s'il ne peut pas être lu comme du JSON (`q=dune`), JSON sinon (nombres, booléens, tableaux, objets, et textes comme `"123"`). Même convention que la sérialisation par défaut de TanStack Router, décodée par `searchParamsSchema`. Les clés `undefined` sont omises.
+
+**Paramètres**
+
+- `query` : requête de liste, complète ou partielle.
+
+**Retour** : les paramètres, à encoder dans l'URL par `buildQueryString` ou `buildUrl`.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { buildUrl } from "@etiennea20/adr-misc";
+import { toListQuerySearchParams } from "@etiennea20/adr-misc/contract";
+
+buildUrl("https://api.bibliotheque.fr", "/livres", toListQuerySearchParams({ q: "dune", page: 2 }));
+// "https://api.bibliotheque.fr/livres?q=dune&page=2"
+```
+
+### `IPage`
+
+| Champ          | Valeur                           |
+| -------------- | -------------------------------- |
+| Catégorie      | `contract`                       |
+| Point d'entrée | `@etiennea20/adr-misc/contract`  |
+| Statut         | stable                           |
+| Depuis         | 0.3.0                            |
+| Source         | `src/contract/page/page.ts`      |
+| Tests          | `src/contract/page/page.test.ts` |
+
+**Signature**
+
+```ts
+interface IPage<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total?: number | undefined;
+  pageCount?: number | undefined;
+  hasNextPage: boolean;
+}
+```
+
+**Description** : page de résultats d'une liste paginée par numéro de page. `total` et `pageCount` sont absents quand le comptage est désactivé (`withTotal: false`) ; `hasNextPage` est toujours renseigné.
+
+**Exemple**
+
+```ts
+import type { IPage } from "@etiennea20/adr-misc/contract";
+
+const empty: IPage<IBook> = {
+  items: [],
+  page: 1,
+  pageSize: 20,
+  total: 0,
+  pageCount: 0,
+  hasNextPage: false,
+};
+```
+
+### `pageSchema`
+
+| Champ          | Valeur                           |
+| -------------- | -------------------------------- |
+| Catégorie      | `contract`                       |
+| Point d'entrée | `@etiennea20/adr-misc/contract`  |
+| Statut         | stable                           |
+| Depuis         | 0.3.0                            |
+| Source         | `src/contract/page/page.ts`      |
+| Tests          | `src/contract/page/page.test.ts` |
+
+**Signature**
+
+```ts
+function pageSchema<T extends z.ZodType>(item: T): z.ZodType<IPage<z.output<T>>, IPage<z.input<T>>>;
+```
+
+**Description** : crée le schéma d'une page de résultats à partir du schéma d'un élément. À utiliser côté front pour valider la réponse d'une liste, côté serveur pour décrire sa sortie.
+
+**Paramètres**
+
+- `item` : schéma zod d'un élément.
+
+**Retour** : le schéma de la page.
+
+**Erreurs** : aucune (la validation renvoie ses problèmes par zod).
+
+**Exemple**
+
+```ts
+import { pageSchema } from "@etiennea20/adr-misc/contract";
+import { z } from "zod";
+
+const bookPageSchema = pageSchema(z.object({ id: z.uuid(), title: z.string() }));
+const page = bookPageSchema.parse(await response.json());
+```
+
+### `apiErrorSchema`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `contract`                                 |
+| Point d'entrée | `@etiennea20/adr-misc/contract`            |
+| Statut         | stable                                     |
+| Depuis         | 0.3.0                                      |
+| Source         | `src/contract/api-error/api-error.ts`      |
+| Tests          | `src/contract/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+const apiErrorSchema: z.ZodObject<{
+  type: z.ZodDefault<z.ZodString>;
+  title: z.ZodString;
+  status: z.ZodInt;
+  detail: z.ZodOptional<z.ZodString>;
+  instance: z.ZodOptional<z.ZodString>;
+  code: z.ZodString;
+  errors: z.ZodOptional<z.ZodArray<typeof apiErrorIssueSchema>>;
+  requestId: z.ZodOptional<z.ZodString>;
+}>;
+```
+
+**Description** : schéma du corps d'une erreur d'API : RFC 9457 (`type`, `"about:blank"` par défaut, `title`, `status` de 100 à 599, `detail`, `instance`) étendue par `code` (voir `EApiErrorCode`, ou code applicatif), `errors` (problèmes par champ) et `requestId` (corrélation). Les membres inconnus sont ignorés. À utiliser côté front pour lire une erreur, côté serveur pour typer le corps produit.
+
+**Exemple**
+
+```ts
+import { EApiErrorCode, apiErrorSchema } from "@etiennea20/adr-misc/contract";
+
+const result = apiErrorSchema.safeParse(await response.json());
+if (result.success && result.data.code === EApiErrorCode.VALIDATION_FAILED) {
+  for (const issue of result.data.errors ?? []) setError(issue.path, { message: issue.message });
+}
+```
+
+### `ApiError`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `contract`                                 |
+| Point d'entrée | `@etiennea20/adr-misc/contract`            |
+| Statut         | stable                                     |
+| Depuis         | 0.3.0                                      |
+| Source         | `src/contract/api-error/api-error.ts`      |
+| Tests          | `src/contract/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+type ApiError = z.infer<typeof apiErrorSchema>;
+```
+
+**Description** : corps d'une réponse d'erreur d'API, inféré de `apiErrorSchema`.
+
+**Exemple**
+
+```ts
+import { type ApiError, EApiErrorCode } from "@etiennea20/adr-misc/contract";
+
+const body: ApiError = {
+  type: "about:blank",
+  title: "Accès refusé",
+  status: 403,
+  code: EApiErrorCode.FORBIDDEN,
+};
+```
+
+### `apiErrorIssueSchema`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `contract`                                 |
+| Point d'entrée | `@etiennea20/adr-misc/contract`            |
+| Statut         | stable                                     |
+| Depuis         | 0.3.0                                      |
+| Source         | `src/contract/api-error/api-error.ts`      |
+| Tests          | `src/contract/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+const apiErrorIssueSchema: z.ZodObject<{
+  path: z.ZodString;
+  message: z.ZodString;
+  code: z.ZodOptional<z.ZodString>;
+}>;
+```
+
+**Description** : schéma d'un problème précis d'une erreur d'API. `path` est le chemin du champ en notation pointée (`"items.0.title"`, `""` pour la racine), utilisable tel quel avec `setError` de react-hook-form ; `code` est facultatif (code zod ou applicatif).
+
+**Exemple**
+
+```ts
+import { apiErrorIssueSchema } from "@etiennea20/adr-misc/contract";
+
+apiErrorIssueSchema.parse({ path: "title", message: "Champ requis" });
+```
+
+### `ApiErrorIssue`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `contract`                                 |
+| Point d'entrée | `@etiennea20/adr-misc/contract`            |
+| Statut         | stable                                     |
+| Depuis         | 0.3.0                                      |
+| Source         | `src/contract/api-error/api-error.ts`      |
+| Tests          | `src/contract/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+type ApiErrorIssue = z.infer<typeof apiErrorIssueSchema>;
+```
+
+**Description** : problème précis d'une erreur d'API, inféré de `apiErrorIssueSchema`.
+
+**Exemple**
+
+```ts
+import type { ApiErrorIssue } from "@etiennea20/adr-misc/contract";
+
+const issue: ApiErrorIssue = { path: "filter.or.1.value", message: "Nombre attendu" };
+```
+
+### `API_ERROR_CONTENT_TYPE`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `contract`                                 |
+| Point d'entrée | `@etiennea20/adr-misc/contract`            |
+| Statut         | stable                                     |
+| Depuis         | 0.3.0                                      |
+| Source         | `src/contract/api-error/api-error.ts`      |
+| Tests          | `src/contract/api-error/api-error.test.ts` |
+
+**Signature**
+
+```ts
+const API_ERROR_CONTENT_TYPE: "application/problem+json";
+```
+
+**Description** : type de média d'une réponse d'erreur RFC 9457 : en-tête `Content-Type` côté serveur, détection d'une erreur normalisée côté front.
+
+**Exemple**
+
+```ts
+import { API_ERROR_CONTENT_TYPE } from "@etiennea20/adr-misc/contract";
+
+response.headers.get("content-type")?.startsWith(API_ERROR_CONTENT_TYPE);
+```
+
+### `EApiErrorCode`
+
+| Champ          | Valeur                                               |
+| -------------- | ---------------------------------------------------- |
+| Catégorie      | `contract`                                           |
+| Point d'entrée | `@etiennea20/adr-misc/contract`                      |
+| Statut         | stable                                               |
+| Depuis         | 0.3.0                                                |
+| Source         | `src/contract/api-error-code/api-error-code.ts`      |
+| Tests          | `src/contract/api-error-code/api-error-code.test.ts` |
+
+**Signature**
+
+```ts
+const EApiErrorCode = {
+  BAD_REQUEST: "BAD_REQUEST",
+  VALIDATION_FAILED: "VALIDATION_FAILED",
+  INVALID_QUERY: "INVALID_QUERY",
+  QUERY_LIMIT_EXCEEDED: "QUERY_LIMIT_EXCEEDED",
+  UNAUTHENTICATED: "UNAUTHENTICATED",
+  FORBIDDEN: "FORBIDDEN",
+  NOT_FOUND: "NOT_FOUND",
+  CONFLICT: "CONFLICT",
+  EXPORT_LIMIT_EXCEEDED: "EXPORT_LIMIT_EXCEEDED",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
+} as const;
+type EApiErrorCode = (typeof EApiErrorCode)[keyof typeof EApiErrorCode];
+```
+
+**Description** : codes d'erreur stables d'`ApiError.code`, partagés serveur / front, pour réagir à une erreur sans dépendre de son message. Statuts usuels : 400 (`BAD_REQUEST`, `VALIDATION_FAILED`, `INVALID_QUERY`, `QUERY_LIMIT_EXCEEDED`, `EXPORT_LIMIT_EXCEEDED`), 401 (`UNAUTHENTICATED`), 403 (`FORBIDDEN`), 404 (`NOT_FOUND`), 409 (`CONFLICT`), 500 (`INTERNAL_ERROR`). Une application peut ajouter ses propres codes.
+
+**Exemple**
+
+```ts
+import { EApiErrorCode } from "@etiennea20/adr-misc/contract";
+
+if (error.code === EApiErrorCode.FORBIDDEN) showAccessDenied();
 ```

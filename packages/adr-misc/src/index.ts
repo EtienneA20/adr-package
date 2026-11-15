@@ -1,3 +1,10 @@
+/**
+ * Point d'entrée principal de `@etiennea20/adr-misc` : toutes les catégories sauf `contract`.
+ *
+ * @packageDocumentation
+ * @module adr-misc
+ */
+
 export * from "./array";
 export * from "./async";
 export * from "./case";

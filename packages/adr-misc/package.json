@@ -19,6 +19,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./contract": {
+      "import": {
+        "types": "./dist/contract/index.d.ts",
+        "default": "./dist/contract/index.js"
+      },
+      "require": {
+        "types": "./dist/contract/index.d.cts",
+        "default": "./dist/contract/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "bin": {
@@ -39,7 +49,13 @@
     "build:skills": "node ../../scripts/install-skills.mjs --package adr-misc --skills-dir skills"
   },
   "peerDependencies": {
-    "dayjs": "^1.11.0"
+    "dayjs": "^1.11.0",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@etiennea20/config": "workspace:*",
@@ -48,7 +64,8 @@
     "eslint": "catalog:",
     "tsup": "^9.0.0",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "zod": "catalog:"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

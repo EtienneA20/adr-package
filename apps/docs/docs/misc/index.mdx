@@ -13,7 +13,9 @@ CJS, sans API propre à un environnement, sans dépendance React ni NestJS.
 pnpm add @etiennea20/adr-misc dayjs
 ```
 
-`dayjs` est une peerDependency : votre projet fournit l'instance (et ses plugins).
+`dayjs` est une peerDependency : votre projet fournit l'instance (et ses plugins). Le
+sous-chemin `@etiennea20/adr-misc/contract` exige en plus `zod` (≥ 4), peerDependency
+optionnelle.
 
 ```ts
 import { formatCurrency, groupBy, isSiret, retry } from "@etiennea20/adr-misc";
@@ -21,8 +23,9 @@ import { formatCurrency, groupBy, isSiret, retry } from "@etiennea20/adr-misc";
 
 ## Principes
 
-- **Un seul point d'entrée** : tout s'importe depuis `@etiennea20/adr-misc`, le tree-shaking
-  ne garde que ce que vous utilisez (`sideEffects: false`).
+- **Deux points d'entrée** : tout s'importe depuis `@etiennea20/adr-misc` (le tree-shaking ne
+  garde que ce que vous utilisez, `sideEffects: false`), sauf le contrat de liste, dans
+  `@etiennea20/adr-misc/contract` (exige zod).
 - **Fonctions pures et immuables** : aucun argument n'est modifié.
 - **Français par défaut** : locale `fr-FR`, euro, dates `DD/MM/YYYY`, jours fériés français,
   messages d'erreur en français ; tout est surchargeable par option.
@@ -31,27 +34,28 @@ import { formatCurrency, groupBy, isSiret, retry } from "@etiennea20/adr-misc";
 
 ## Catégories
 
-| Catégorie                                  | Contenu                                                          |
-| ------------------------------------------ | ---------------------------------------------------------------- |
-| [Assertions et erreurs](/misc/guides/core) | `invariant`, `assertNever`, `Result`, `tryCatch`…                |
-| [Gardes de type](/misc/guides/guards)      | `isDefined`, `isPlainObject`, `isEmpty`…                         |
-| [Types utilitaires](/misc/guides/types)    | `DeepPartial`, `Brand`, `PartialBy`…                             |
-| [Fonctions](/misc/guides/function)         | `once`, `memoize`, `pipe`…                                       |
-| [Asynchrone](/misc/guides/async)           | `retry`, `debounce`, `throttle`, `withTimeout`, `mapConcurrent`… |
-| [Tableaux](/misc/guides/array)             | `chunk`, `groupBy`, `sortBy`, `partition`, `moveItem`…           |
-| [Objets](/misc/guides/object)              | `pick`, `omit`, `deepMerge`, `isEqual`, `getPath`…               |
-| [Chaînes](/misc/guides/string)             | `slugify`, `truncate`, `pluralize`, `matchesSearch`…             |
-| [Casse](/misc/guides/case)                 | `toCamelCase`, `toKebabCase`, `toTitleCase`…                     |
-| [Calculs](/misc/guides/math)               | `clamp`, `round`, `median`, `percentage`…                        |
-| [Aléatoire](/misc/guides/random)           | `randomInt`, `shuffle`, `createSeededRandom`, `createUuid`…      |
-| [Parsing](/misc/guides/parsing)            | `parseNumber`, `parseDate`, `parseDuration`, `parseCsv`…         |
-| [Formatage](/misc/guides/format)           | `formatCurrency`, `formatBytes`, `formatRelativeTime`…           |
-| [Dates](/misc/guides/date)                 | `getPublicHolidaysFr`, `addBusinessDays`, `getIsoWeek`…          |
-| [Énumérations](/misc/guides/enums)         | `EWeekDay`, `EHttpStatus`, `EMimeType`, `getEnumValues`…         |
-| [Validation](/misc/guides/validation)      | `isEmail`, `isSiret`, `isIban`, `isNir`, `getPasswordStrength`…  |
-| [URL](/misc/guides/url)                    | `buildQueryString`, `parseQueryString`, `joinUrl`…               |
-| [Fichiers](/misc/guides/file)              | `getFileExtension`, `sanitizeFileName`, `getMimeType`…           |
-| [Couleurs](/misc/guides/color)             | `hexToRgb`, `getContrastRatio`, `getReadableTextColor`…          |
+| Catégorie                                  | Contenu                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| [Assertions et erreurs](/misc/guides/core) | `invariant`, `assertNever`, `Result`, `tryCatch`…                   |
+| [Gardes de type](/misc/guides/guards)      | `isDefined`, `isPlainObject`, `isEmpty`…                            |
+| [Types utilitaires](/misc/guides/types)    | `DeepPartial`, `Brand`, `PartialBy`…                                |
+| [Fonctions](/misc/guides/function)         | `once`, `memoize`, `pipe`…                                          |
+| [Asynchrone](/misc/guides/async)           | `retry`, `debounce`, `throttle`, `withTimeout`, `mapConcurrent`…    |
+| [Tableaux](/misc/guides/array)             | `chunk`, `groupBy`, `sortBy`, `partition`, `moveItem`…              |
+| [Objets](/misc/guides/object)              | `pick`, `omit`, `deepMerge`, `isEqual`, `getPath`…                  |
+| [Chaînes](/misc/guides/string)             | `slugify`, `truncate`, `pluralize`, `matchesSearch`…                |
+| [Casse](/misc/guides/case)                 | `toCamelCase`, `toKebabCase`, `toTitleCase`…                        |
+| [Calculs](/misc/guides/math)               | `clamp`, `round`, `median`, `percentage`…                           |
+| [Aléatoire](/misc/guides/random)           | `randomInt`, `shuffle`, `createSeededRandom`, `createUuid`…         |
+| [Parsing](/misc/guides/parsing)            | `parseNumber`, `parseDate`, `parseDuration`, `parseCsv`…            |
+| [Formatage](/misc/guides/format)           | `formatCurrency`, `formatBytes`, `formatRelativeTime`…              |
+| [Dates](/misc/guides/date)                 | `getPublicHolidaysFr`, `addBusinessDays`, `getIsoWeek`…             |
+| [Énumérations](/misc/guides/enums)         | `EWeekDay`, `EHttpStatus`, `EMimeType`, `getEnumValues`…            |
+| [Validation](/misc/guides/validation)      | `isEmail`, `isSiret`, `isIban`, `isNir`, `getPasswordStrength`…     |
+| [URL](/misc/guides/url)                    | `buildQueryString`, `parseQueryString`, `joinUrl`…                  |
+| [Fichiers](/misc/guides/file)              | `getFileExtension`, `sanitizeFileName`, `getMimeType`…              |
+| [Couleurs](/misc/guides/color)             | `hexToRgb`, `getContrastRatio`, `getReadableTextColor`…             |
+| [Contrat de liste](/misc/guides/contract)  | `defineListQuery`, `pageSchema`, `apiErrorSchema`, `EApiErrorCode`… |
 
 - **Guides** : un par catégorie, avec des exemples tirés d'une application fictive
   « Bibliothèque ».
