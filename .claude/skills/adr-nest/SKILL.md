@@ -14,12 +14,15 @@ Utilitaires pour applications NestJS (11 ou 12), compilés en CommonJS avec les 
 décorateurs (`emitDecoratorMetadata`).
 
 - Points d'entrée : `@etiennea20/adr-nest` (common, rights), `@etiennea20/adr-nest/filtering`
-  (exige `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4, peerDependencies optionnelles) et
-  `@etiennea20/adr-nest/prisma` (aucune dépendance).
+  (exige `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4, peerDependencies optionnelles),
+  `@etiennea20/adr-nest/prisma` (aucune dépendance), `@etiennea20/adr-nest/export` (exige
+  `@etiennea20/adr-misc`) et `@etiennea20/adr-nest/excel` (exige `@etiennea20/adr-misc` et
+  `fflate` ≥ 0.8).
 - peerDependencies : `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs`.
 - Catégories : `common` (format d'erreur d'API, exceptions, validation, éléments
   transverses), `rights` (gestion des droits), `filtering` (requêtes de liste, sous-chemin),
-  `prisma` (adaptateur, sous-chemin), `export` (export Excel et JSON).
+  `prisma` (adaptateur, sous-chemin), `export` (JSON, NDJSON, CSV, sous-chemin), `excel` (XLSX,
+  sous-chemin).
 
 ## Catégories
 
@@ -29,7 +32,8 @@ décorateurs (`emitDecoratorMetadata`).
   - [`IS_PUBLIC_KEY`](reference.md#is_public_key)
 - [filtering](reference.md#filtering) : requêtes de liste et critères, sous-chemin `/filtering` (`andCriteria`, `applyCriteriaInMemory`, `CriteriaNode`, `CriteriaValue`, `ICriteriaCondition`, `ICriteriaOrder`, `IListCriteria`, `IListCriteriaOptions`, `IListQueryParamOptions`, `ListQuery`, `ListQueryConfigError`, `parseListQuery`, `toListCriteria`, `toPage`)
 - [prisma](reference.md#prisma) : adaptateur Prisma, sous-chemin `/prisma` (`IPrismaFindArgs`, `toPrismaFindArgs`, `toPrismaWhere`)
-- `export` : export Excel et JSON (aucun élément pour l'instant)
+- [export](reference.md#export) : exports JSON, NDJSON, CSV et réponse de téléchargement, sous-chemin `/export` (`assertExportSize`, `contentDisposition`, `createExportFile`, `DEFAULT_EXPORT_MAX_ROWS`, `defineExportColumns`, `EExportColumnType`, `EExportFormat`, `EXPORT_CONTENT_TYPES`, `ExportCellValue`, `ExportConfigError`, `ExportHeaders`, `ExportLimitExceededException`, `ICsvExportOptions`, `IExportColumn`, `IExportFileOptions`, `IExportOptions`, `limitExportRows`, `readExportCell`, `selectExportColumns`, `toCsvExport`, `toJsonExport`, `toNdjsonExport`)
+- [excel](reference.md#excel) : export XLSX, sous-chemin `/excel` (`IXlsxExportOptions`, `toXlsxExport`)
 
 ## Retrouver un élément
 

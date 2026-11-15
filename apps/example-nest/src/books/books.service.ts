@@ -17,6 +17,17 @@ export class BooksService {
   }
   // #endregion find-page
 
+  // Export : mêmes filtre et tri que la liste, sans pagination.
+  findAllMatching(criteria: IListCriteria): IBook[] {
+    const all = {
+      ...criteria,
+      skip: 0,
+      take: Number.MAX_SAFE_INTEGER,
+      pageSize: Number.MAX_SAFE_INTEGER,
+    };
+    return applyCriteriaInMemory(this.repository.findAll(), all).items;
+  }
+
   get(id: string): IBook {
     const book = this.repository.findById(id);
     if (!book) throw new NotFoundException(`Livre « ${id} » introuvable.`);

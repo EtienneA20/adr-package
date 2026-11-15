@@ -8,12 +8,15 @@ Utilitaires pour applications NestJS (11 ou 12), compilés en CommonJS avec les 
 décorateurs (`emitDecoratorMetadata`).
 
 - Points d'entrée : `@etiennea20/adr-nest` (common, rights), `@etiennea20/adr-nest/filtering`
-  (exige `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4, peerDependencies optionnelles) et
-  `@etiennea20/adr-nest/prisma` (aucune dépendance).
+  (exige `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4, peerDependencies optionnelles),
+  `@etiennea20/adr-nest/prisma` (aucune dépendance), `@etiennea20/adr-nest/export` (exige
+  `@etiennea20/adr-misc`) et `@etiennea20/adr-nest/excel` (exige `@etiennea20/adr-misc` et
+  `fflate` ≥ 0.8).
 - peerDependencies : `@nestjs/common`, `@nestjs/core`, `reflect-metadata`, `rxjs`.
 - Catégories : `common` (format d'erreur d'API, exceptions, validation, éléments
   transverses), `rights` (gestion des droits), `filtering` (requêtes de liste, sous-chemin),
-  `prisma` (adaptateur, sous-chemin), `export` (export Excel et JSON).
+  `prisma` (adaptateur, sous-chemin), `export` (JSON, NDJSON, CSV, sous-chemin), `excel` (XLSX,
+  sous-chemin).
 
 ## Table des matières
 
@@ -23,7 +26,8 @@ décorateurs (`emitDecoratorMetadata`).
   - [`IS_PUBLIC_KEY`](#is_public_key)
 - [filtering](#filtering) : requêtes de liste et critères, sous-chemin `/filtering` (`andCriteria`, `applyCriteriaInMemory`, `CriteriaNode`, `CriteriaValue`, `ICriteriaCondition`, `ICriteriaOrder`, `IListCriteria`, `IListCriteriaOptions`, `IListQueryParamOptions`, `ListQuery`, `ListQueryConfigError`, `parseListQuery`, `toListCriteria`, `toPage`)
 - [prisma](#prisma) : adaptateur Prisma, sous-chemin `/prisma` (`IPrismaFindArgs`, `toPrismaFindArgs`, `toPrismaWhere`)
-- `export` : export Excel et JSON (aucun élément pour l'instant)
+- [export](#export) : exports JSON, NDJSON, CSV et réponse de téléchargement, sous-chemin `/export` (`assertExportSize`, `contentDisposition`, `createExportFile`, `DEFAULT_EXPORT_MAX_ROWS`, `defineExportColumns`, `EExportColumnType`, `EExportFormat`, `EXPORT_CONTENT_TYPES`, `ExportCellValue`, `ExportConfigError`, `ExportHeaders`, `ExportLimitExceededException`, `ICsvExportOptions`, `IExportColumn`, `IExportFileOptions`, `IExportOptions`, `limitExportRows`, `readExportCell`, `selectExportColumns`, `toCsvExport`, `toJsonExport`, `toNdjsonExport`)
+- [excel](#excel) : export XLSX, sous-chemin `/excel` (`IXlsxExportOptions`, `toXlsxExport`)
 
 ## common
 
@@ -1257,6 +1261,870 @@ interface IPrismaFindArgs {
 import type { IPrismaFindArgs } from "@etiennea20/adr-nest/prisma";
 
 const args: IPrismaFindArgs = toPrismaFindArgs(criteria);
+```
+
+## export
+
+Sous-chemin `@etiennea20/adr-nest/export` (peerDependency optionnelle `@etiennea20/adr-misc` ≥ 0.3) : exports JSON, NDJSON et CSV en flux, liste blanche de colonnes, neutralisation des formules, limite de lignes, réponse de téléchargement NestJS. Le XLSX est dans `@etiennea20/adr-nest/excel`.
+
+### `defineExportColumns`
+
+| Champ          | Valeur                                             |
+| -------------- | -------------------------------------------------- |
+| Catégorie      | `export`                                           |
+| Point d'entrée | `@etiennea20/adr-nest/export`                      |
+| Statut         | stable                                             |
+| Depuis         | 0.2.0                                              |
+| Source         | `src/export/export-columns/export-columns.ts`      |
+| Tests          | `src/export/export-columns/export-columns.test.ts` |
+
+**Signature**
+
+```ts
+function defineExportColumns<T>(columns: readonly IExportColumn<T>[]): readonly IExportColumn<T>[];
+```
+
+**Description** : définit les colonnes d'un export : liste blanche de ce qui est écrit (clé, en-tête, type, lecture de la valeur, largeur XLSX, `trusted`). À déclarer une fois par export (constante de module).
+
+**Paramètres**
+
+- `columns` : colonnes, dans l'ordre d'écriture.
+
+**Retour** : les colonnes vérifiées (tableau figé).
+
+**Erreurs** : `ExportConfigError` si la liste est vide, ou si une colonne a une clé invalide ou en double, un en-tête vide, un type inconnu ou une largeur non positive.
+
+**Exemple**
+
+```ts
+import { defineExportColumns } from "@etiennea20/adr-nest/export";
+
+export const bookExportColumns = defineExportColumns<IBook>([
+  { key: "title", header: "Titre", width: 40 },
+  { key: "author", header: "Auteur", value: (book) => book.author.name },
+  { key: "publishedAt", header: "Publication", type: "date" },
+  { key: "price", header: "Prix", type: "currency" },
+]);
+```
+
+### `selectExportColumns`
+
+| Champ          | Valeur                                             |
+| -------------- | -------------------------------------------------- |
+| Catégorie      | `export`                                           |
+| Point d'entrée | `@etiennea20/adr-nest/export`                      |
+| Statut         | stable                                             |
+| Depuis         | 0.2.0                                              |
+| Source         | `src/export/export-columns/export-columns.ts`      |
+| Tests          | `src/export/export-columns/export-columns.test.ts` |
+
+**Signature**
+
+```ts
+function selectExportColumns<T>(
+  columns: readonly IExportColumn<T>[],
+  keys: readonly string[] | undefined,
+): readonly IExportColumn<T>[];
+```
+
+**Description** : garde les colonnes demandées par le client (sélection `fields` d'une requête de liste), dans l'ordre de la définition ; une clé inconnue est ignorée ; sans demande valide, toutes les colonnes.
+
+**Paramètres**
+
+- `columns` : colonnes définies.
+- `keys` : clés demandées, ou `undefined`.
+
+**Retour** : les colonnes retenues.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { selectExportColumns } from "@etiennea20/adr-nest/export";
+
+const columns = selectExportColumns(bookExportColumns, criteria.select);
+```
+
+### `IExportColumn`
+
+| Champ          | Valeur                                             |
+| -------------- | -------------------------------------------------- |
+| Catégorie      | `export`                                           |
+| Point d'entrée | `@etiennea20/adr-nest/export`                      |
+| Statut         | stable                                             |
+| Depuis         | 0.2.0                                              |
+| Source         | `src/export/export-columns/export-columns.ts`      |
+| Tests          | `src/export/export-columns/export-columns.test.ts` |
+
+**Signature**
+
+```ts
+interface IExportColumn<T> {
+  readonly key: string;
+  readonly header: string;
+  readonly type?: EExportColumnType | undefined;
+  readonly value?: ((row: T) => unknown) | undefined;
+  readonly width?: number | undefined;
+  readonly trusted?: boolean | undefined;
+}
+```
+
+**Description** : colonne d'export : `key` (clé JSON, chemin lu par défaut), `header` (CSV, XLSX), `type` (`text` par défaut), `value` (lecture personnalisée), `width` (XLSX, en caractères), `trusted` (contenu maîtrisé par le serveur : pas de neutralisation des formules ; jamais pour une saisie utilisateur).
+
+**Exemple**
+
+```ts
+import type { IExportColumn } from "@etiennea20/adr-nest/export";
+
+const author: IExportColumn<IBook> = {
+  key: "author",
+  header: "Auteur",
+  value: (book) => book.author.name,
+};
+```
+
+### `EExportColumnType`
+
+| Champ          | Valeur                                             |
+| -------------- | -------------------------------------------------- |
+| Catégorie      | `export`                                           |
+| Point d'entrée | `@etiennea20/adr-nest/export`                      |
+| Statut         | stable                                             |
+| Depuis         | 0.2.0                                              |
+| Source         | `src/export/export-columns/export-columns.ts`      |
+| Tests          | `src/export/export-columns/export-columns.test.ts` |
+
+**Signature**
+
+```ts
+const EExportColumnType = {
+  TEXT: "text",
+  NUMBER: "number",
+  CURRENCY: "currency",
+  DATE: "date",
+  DATETIME: "datetime",
+  BOOLEAN: "boolean",
+} as const;
+type EExportColumnType = (typeof EExportColumnType)[keyof typeof EExportColumnType];
+```
+
+**Description** : type d'une colonne d'export. XLSX : cellule typée au format français (`# ##0,00 €`, `jj/mm/aaaa`, `jj/mm/aaaa hh:mm`) ; CSV : valeur formatée en français (`12,5`, `31/01/2026`, `oui`) ; JSON : valeur brute (dates ISO 8601).
+
+**Exemple**
+
+```ts
+import { EExportColumnType } from "@etiennea20/adr-nest/export";
+
+const column = { key: "price", header: "Prix", type: EExportColumnType.CURRENCY };
+```
+
+### `ExportConfigError`
+
+| Champ          | Valeur                                                       |
+| -------------- | ------------------------------------------------------------ |
+| Catégorie      | `export`                                                     |
+| Point d'entrée | `@etiennea20/adr-nest/export`                                |
+| Statut         | stable                                                       |
+| Depuis         | 0.2.0                                                        |
+| Source         | `src/export/export-config-error/export-config-error.ts`      |
+| Tests          | `src/export/export-config-error/export-config-error.test.ts` |
+
+**Signature**
+
+```ts
+class ExportConfigError extends Error {
+  readonly name: "ExportConfigError";
+}
+```
+
+**Description** : erreur de configuration d'un export côté serveur (colonnes invalides), levée à la définition, jamais à cause d'une requête client.
+
+**Exemple**
+
+```ts
+import { defineExportColumns } from "@etiennea20/adr-nest/export";
+
+// Lève ExportConfigError : clé en double.
+defineExportColumns([
+  { key: "title", header: "Titre" },
+  { key: "title", header: "Nom" },
+]);
+```
+
+### `readExportCell`
+
+| Champ          | Valeur                                                 |
+| -------------- | ------------------------------------------------------ |
+| Catégorie      | `export`                                               |
+| Point d'entrée | `@etiennea20/adr-nest/export`                          |
+| Statut         | stable                                                 |
+| Depuis         | 0.2.0                                                  |
+| Source         | `src/export/read-export-cell/read-export-cell.ts`      |
+| Tests          | `src/export/read-export-cell/read-export-cell.test.ts` |
+
+**Signature**
+
+```ts
+function readExportCell<T>(row: T, column: IExportColumn<T>): ExportCellValue;
+```
+
+**Description** : lit la valeur d'une colonne pour une ligne (`column.value(row)`, sinon le chemin `key`) et la convertit selon le type : texte (dates en ISO, objets en JSON), nombre fini, `Date` valide, booléen ; `null` si absente ou non convertible. Pour écrire un format personnalisé avec les mêmes conversions.
+
+**Paramètres**
+
+- `row` : ligne exportée.
+- `column` : colonne à lire.
+
+**Retour** : la valeur convertie, ou `null`.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { readExportCell } from "@etiennea20/adr-nest/export";
+
+readExportCell(book, { key: "publishedAt", header: "Publication", type: "date" }); // Date
+```
+
+### `ExportCellValue`
+
+| Champ          | Valeur                                                 |
+| -------------- | ------------------------------------------------------ |
+| Catégorie      | `export`                                               |
+| Point d'entrée | `@etiennea20/adr-nest/export`                          |
+| Statut         | stable                                                 |
+| Depuis         | 0.2.0                                                  |
+| Source         | `src/export/read-export-cell/read-export-cell.ts`      |
+| Tests          | `src/export/read-export-cell/read-export-cell.test.ts` |
+
+**Signature**
+
+```ts
+type ExportCellValue = string | number | boolean | Date | null;
+```
+
+**Description** : valeur d'une cellule après conversion (`null` : cellule vide).
+
+**Exemple**
+
+```ts
+import type { ExportCellValue } from "@etiennea20/adr-nest/export";
+
+const value: ExportCellValue = new Date("2026-01-31");
+```
+
+### `toJsonExport`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `export`                                     |
+| Point d'entrée | `@etiennea20/adr-nest/export`                |
+| Statut         | stable                                       |
+| Depuis         | 0.2.0                                        |
+| Source         | `src/export/json-export/json-export.ts`      |
+| Tests          | `src/export/json-export/json-export.test.ts` |
+
+**Signature**
+
+```ts
+function toJsonExport<T>(
+  rows: Iterable<T> | AsyncIterable<T>,
+  columns: readonly IExportColumn<T>[],
+  options?: IExportOptions,
+): AsyncGenerator<string>;
+```
+
+**Description** : produit un tableau JSON en flux (`[`, un objet par ligne, `]`), avec les seules colonnes déclarées (dates en ISO 8601).
+
+**Paramètres**
+
+- `rows` : lignes (tableau, itérable ou itérable asynchrone).
+- `columns` : colonnes (`defineExportColumns`).
+- `options` : limite de lignes.
+
+**Retour** : les morceaux de texte du fichier.
+
+**Erreurs** : `ExportLimitExceededException` pendant le flux, au-delà de `maxRows`.
+
+**Exemple**
+
+```ts
+import { createExportFile, toJsonExport } from "@etiennea20/adr-nest/export";
+
+return createExportFile(toJsonExport(books, bookExportColumns), {
+  format: "json",
+  fileName: "catalogue",
+});
+```
+
+### `toNdjsonExport`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `export`                                     |
+| Point d'entrée | `@etiennea20/adr-nest/export`                |
+| Statut         | stable                                       |
+| Depuis         | 0.2.0                                        |
+| Source         | `src/export/json-export/json-export.ts`      |
+| Tests          | `src/export/json-export/json-export.test.ts` |
+
+**Signature**
+
+```ts
+function toNdjsonExport<T>(
+  rows: Iterable<T> | AsyncIterable<T>,
+  columns: readonly IExportColumn<T>[],
+  options?: IExportOptions,
+): AsyncGenerator<string>;
+```
+
+**Description** : produit un export NDJSON en flux : un objet JSON par ligne, chacune terminée par `\n`.
+
+**Paramètres**
+
+- `rows` : lignes (tableau, itérable ou itérable asynchrone).
+- `columns` : colonnes (`defineExportColumns`).
+- `options` : limite de lignes.
+
+**Retour** : les lignes du fichier.
+
+**Erreurs** : `ExportLimitExceededException` pendant le flux, au-delà de `maxRows`.
+
+**Exemple**
+
+```ts
+import { createExportFile, toNdjsonExport } from "@etiennea20/adr-nest/export";
+
+return createExportFile(toNdjsonExport(books, bookExportColumns), {
+  format: "ndjson",
+  fileName: "catalogue",
+});
+```
+
+### `IExportOptions`
+
+| Champ          | Valeur                                       |
+| -------------- | -------------------------------------------- |
+| Catégorie      | `export`                                     |
+| Point d'entrée | `@etiennea20/adr-nest/export`                |
+| Statut         | stable                                       |
+| Depuis         | 0.2.0                                        |
+| Source         | `src/export/json-export/json-export.ts`      |
+| Tests          | `src/export/json-export/json-export.test.ts` |
+
+**Signature**
+
+```ts
+interface IExportOptions {
+  readonly maxRows?: number | undefined;
+  readonly timeZone?: string | undefined;
+}
+```
+
+**Description** : options communes des formats : nombre maximal de lignes (`DEFAULT_EXPORT_MAX_ROWS`) et fuseau horaire des dates en CSV et XLSX (`Europe/Paris`).
+
+**Exemple**
+
+```ts
+import type { IExportOptions } from "@etiennea20/adr-nest/export";
+
+const options: IExportOptions = { maxRows: 10_000, timeZone: "Europe/Paris" };
+```
+
+### `toCsvExport`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `export`                                   |
+| Point d'entrée | `@etiennea20/adr-nest/export`              |
+| Statut         | stable                                     |
+| Depuis         | 0.2.0                                      |
+| Source         | `src/export/csv-export/csv-export.ts`      |
+| Tests          | `src/export/csv-export/csv-export.test.ts` |
+
+**Signature**
+
+```ts
+function toCsvExport<T>(
+  rows: Iterable<T> | AsyncIterable<T>,
+  columns: readonly IExportColumn<T>[],
+  options?: ICsvExportOptions,
+): AsyncGenerator<string>;
+```
+
+**Description** : produit un CSV pour Excel en français, en flux : BOM UTF-8, `;`, virgule décimale, `\r\n`, dates `JJ/MM/AAAA` (`HH:mm`), booléens `oui` / `non`. Chaque texte (en-têtes compris) qui ressemble à une formule est préfixé d'une apostrophe (`escapeSpreadsheetFormula`), sauf colonne `trusted` ; les nombres ne sont pas modifiés.
+
+**Paramètres**
+
+- `rows` : lignes (tableau, itérable ou itérable asynchrone).
+- `columns` : colonnes (`defineExportColumns`).
+- `options` : séparateur, BOM, fuseau, limite de lignes.
+
+**Retour** : les morceaux de texte du fichier (par lots de 500 lignes).
+
+**Erreurs** : `ExportLimitExceededException` pendant le flux, au-delà de `maxRows` ; `RangeError` si `delimiter` est invalide.
+
+**Exemple**
+
+```ts
+import { createExportFile, toCsvExport } from "@etiennea20/adr-nest/export";
+
+return createExportFile(toCsvExport(books, bookExportColumns), {
+  format: "csv",
+  fileName: "catalogue",
+});
+```
+
+### `ICsvExportOptions`
+
+| Champ          | Valeur                                     |
+| -------------- | ------------------------------------------ |
+| Catégorie      | `export`                                   |
+| Point d'entrée | `@etiennea20/adr-nest/export`              |
+| Statut         | stable                                     |
+| Depuis         | 0.2.0                                      |
+| Source         | `src/export/csv-export/csv-export.ts`      |
+| Tests          | `src/export/csv-export/csv-export.test.ts` |
+
+**Signature**
+
+```ts
+interface ICsvExportOptions extends IExportOptions {
+  readonly delimiter?: string | undefined;
+  readonly bom?: boolean | undefined;
+}
+```
+
+**Description** : options du CSV : séparateur (`;` par défaut) et BOM UTF-8 pour Excel (`true` par défaut).
+
+**Exemple**
+
+```ts
+import type { ICsvExportOptions } from "@etiennea20/adr-nest/export";
+
+const options: ICsvExportOptions = { delimiter: ",", bom: false };
+```
+
+### `DEFAULT_EXPORT_MAX_ROWS`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `export`                                       |
+| Point d'entrée | `@etiennea20/adr-nest/export`                  |
+| Statut         | stable                                         |
+| Depuis         | 0.2.0                                          |
+| Source         | `src/export/export-limit/export-limit.ts`      |
+| Tests          | `src/export/export-limit/export-limit.test.ts` |
+
+**Signature**
+
+```ts
+const DEFAULT_EXPORT_MAX_ROWS = 50000;
+```
+
+**Description** : nombre maximal de lignes d'un export par défaut (50 000).
+
+**Exemple**
+
+```ts
+import { DEFAULT_EXPORT_MAX_ROWS, assertExportSize } from "@etiennea20/adr-nest/export";
+
+assertExportSize(total, DEFAULT_EXPORT_MAX_ROWS);
+```
+
+### `ExportLimitExceededException`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `export`                                       |
+| Point d'entrée | `@etiennea20/adr-nest/export`                  |
+| Statut         | stable                                         |
+| Depuis         | 0.2.0                                          |
+| Source         | `src/export/export-limit/export-limit.ts`      |
+| Tests          | `src/export/export-limit/export-limit.test.ts` |
+
+**Signature**
+
+```ts
+class ExportLimitExceededException extends ApiException {
+  constructor(maxRows: number);
+  readonly maxRows: number;
+}
+```
+
+**Description** : export trop volumineux : 400 `EXPORT_LIMIT_EXCEEDED` au format d'erreur d'API (« Export trop volumineux », détail avec la limite).
+
+**Paramètres**
+
+- `maxRows` : nombre maximal de lignes autorisé.
+
+**Retour** : sans objet (classe).
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { ExportLimitExceededException } from "@etiennea20/adr-nest/export";
+
+throw new ExportLimitExceededException(50_000);
+```
+
+### `assertExportSize`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `export`                                       |
+| Point d'entrée | `@etiennea20/adr-nest/export`                  |
+| Statut         | stable                                         |
+| Depuis         | 0.2.0                                          |
+| Source         | `src/export/export-limit/export-limit.ts`      |
+| Tests          | `src/export/export-limit/export-limit.test.ts` |
+
+**Signature**
+
+```ts
+function assertExportSize(count: number, maxRows?: number): void;
+```
+
+**Description** : vérifie **avant** l'envoi que l'export ne dépasse pas la limite : une fois le flux commencé, le statut HTTP ne peut plus changer et une erreur ne fait que tronquer le fichier.
+
+**Paramètres**
+
+- `count` : nombre de lignes à exporter.
+- `maxRows` : limite (`DEFAULT_EXPORT_MAX_ROWS`).
+
+**Retour** : rien.
+
+**Erreurs** : `ExportLimitExceededException` si `count` dépasse `maxRows`.
+
+**Exemple**
+
+```ts
+import { assertExportSize } from "@etiennea20/adr-nest/export";
+
+assertExportSize(await prisma.book.count({ where }), 10_000);
+```
+
+### `limitExportRows`
+
+| Champ          | Valeur                                         |
+| -------------- | ---------------------------------------------- |
+| Catégorie      | `export`                                       |
+| Point d'entrée | `@etiennea20/adr-nest/export`                  |
+| Statut         | stable                                         |
+| Depuis         | 0.2.0                                          |
+| Source         | `src/export/export-limit/export-limit.ts`      |
+| Tests          | `src/export/export-limit/export-limit.test.ts` |
+
+**Signature**
+
+```ts
+function limitExportRows<T>(
+  rows: Iterable<T> | AsyncIterable<T>,
+  maxRows?: number,
+): AsyncGenerator<T>;
+```
+
+**Description** : parcourt les lignes d'un export en s'arrêtant au-delà de la limite (garde-fou des formats, utile pour un format personnalisé).
+
+**Paramètres**
+
+- `rows` : lignes (tableau, itérable ou itérable asynchrone).
+- `maxRows` : limite (`DEFAULT_EXPORT_MAX_ROWS`).
+
+**Retour** : les lignes, une à une.
+
+**Erreurs** : `ExportLimitExceededException` dès que la ligne `maxRows + 1` est lue.
+
+**Exemple**
+
+```ts
+import { limitExportRows } from "@etiennea20/adr-nest/export";
+
+for await (const book of limitExportRows(books, 1000)) write(book);
+```
+
+### `createExportFile`
+
+| Champ          | Valeur                                                     |
+| -------------- | ---------------------------------------------------------- |
+| Catégorie      | `export`                                                   |
+| Point d'entrée | `@etiennea20/adr-nest/export`                              |
+| Statut         | stable                                                     |
+| Depuis         | 0.2.0                                                      |
+| Source         | `src/export/create-export-file/create-export-file.ts`      |
+| Tests          | `src/export/create-export-file/create-export-file.test.ts` |
+
+**Signature**
+
+```ts
+function createExportFile(
+  stream: AsyncIterable<string | Uint8Array>,
+  options: IExportFileOptions,
+): StreamableFile;
+```
+
+**Description** : crée la réponse NestJS d'un export (Express et Fastify) : `StreamableFile` en flux, `Content-Type` du format, `Content-Disposition` (nom assaini, extension ajoutée si absente). Une erreur pendant le flux interrompt le téléchargement : vérifier la taille avant (`assertExportSize`).
+
+**Paramètres**
+
+- `stream` : contenu (`toJsonExport`, `toCsvExport`, `toXlsxExport`…).
+- `options` : format et nom du fichier.
+
+**Retour** : le fichier à renvoyer par la route.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { ExportHeaders, createExportFile, toCsvExport } from "@etiennea20/adr-nest/export";
+
+@Get("export.csv")
+@ExportHeaders()
+export(): StreamableFile {
+  return createExportFile(toCsvExport(this.books.findAll(), bookExportColumns), { format: "csv", fileName: "Catalogue" });
+}
+```
+
+### `IExportFileOptions`
+
+| Champ          | Valeur                                                     |
+| -------------- | ---------------------------------------------------------- |
+| Catégorie      | `export`                                                   |
+| Point d'entrée | `@etiennea20/adr-nest/export`                              |
+| Statut         | stable                                                     |
+| Depuis         | 0.2.0                                                      |
+| Source         | `src/export/create-export-file/create-export-file.ts`      |
+| Tests          | `src/export/create-export-file/create-export-file.test.ts` |
+
+**Signature**
+
+```ts
+interface IExportFileOptions {
+  readonly format: EExportFormat;
+  readonly fileName: string;
+}
+```
+
+**Description** : options de `createExportFile` : format (type de média, extension) et nom proposé au téléchargement (texte libre, assaini).
+
+**Exemple**
+
+```ts
+import type { IExportFileOptions } from "@etiennea20/adr-nest/export";
+
+const options: IExportFileOptions = { format: "xlsx", fileName: "Catalogue 2026" };
+```
+
+### `contentDisposition`
+
+| Champ          | Valeur                                                     |
+| -------------- | ---------------------------------------------------------- |
+| Catégorie      | `export`                                                   |
+| Point d'entrée | `@etiennea20/adr-nest/export`                              |
+| Statut         | stable                                                     |
+| Depuis         | 0.2.0                                                      |
+| Source         | `src/export/create-export-file/create-export-file.ts`      |
+| Tests          | `src/export/create-export-file/create-export-file.test.ts` |
+
+**Signature**
+
+```ts
+function contentDisposition(fileName: string): string;
+```
+
+**Description** : construit l'en-tête `Content-Disposition` d'un téléchargement : nom assaini (`sanitizeFileName`), `filename` en ASCII et `filename*` en UTF-8 encodé (RFC 6266 et 5987). Aucun texte saisi ne peut injecter un en-tête ou un chemin.
+
+**Paramètres**
+
+- `fileName` : nom du fichier, extension comprise.
+
+**Retour** : la valeur de l'en-tête.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { contentDisposition } from "@etiennea20/adr-nest/export";
+
+contentDisposition("Prêts en retard.csv");
+// "attachment; filename=\"Prets en retard.csv\"; filename*=UTF-8''Pr%C3%AAts%20en%20retard.csv"
+```
+
+### `ExportHeaders`
+
+| Champ          | Valeur                                                     |
+| -------------- | ---------------------------------------------------------- |
+| Catégorie      | `export`                                                   |
+| Point d'entrée | `@etiennea20/adr-nest/export`                              |
+| Statut         | stable                                                     |
+| Depuis         | 0.2.0                                                      |
+| Source         | `src/export/create-export-file/create-export-file.ts`      |
+| Tests          | `src/export/create-export-file/create-export-file.test.ts` |
+
+**Signature**
+
+```ts
+function ExportHeaders(): MethodDecorator & ClassDecorator;
+```
+
+**Description** : décorateur de route d'export : `X-Content-Type-Options: nosniff` et `Cache-Control: no-store`.
+
+**Paramètres**
+
+- aucun.
+
+**Retour** : un décorateur de méthode ou de classe.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { ExportHeaders } from "@etiennea20/adr-nest/export";
+
+@Get("export")
+@ExportHeaders()
+export() {}
+```
+
+### `EExportFormat`
+
+| Champ          | Valeur                                           |
+| -------------- | ------------------------------------------------ |
+| Catégorie      | `export`                                         |
+| Point d'entrée | `@etiennea20/adr-nest/export`                    |
+| Statut         | stable                                           |
+| Depuis         | 0.2.0                                            |
+| Source         | `src/export/export-format/export-format.ts`      |
+| Tests          | `src/export/export-format/export-format.test.ts` |
+
+**Signature**
+
+```ts
+const EExportFormat = { JSON: "json", NDJSON: "ndjson", CSV: "csv", XLSX: "xlsx" } as const;
+type EExportFormat = (typeof EExportFormat)[keyof typeof EExportFormat];
+```
+
+**Description** : formats d'export ; la valeur sert aussi d'extension. `xlsx` est produit par `@etiennea20/adr-nest/excel`.
+
+**Exemple**
+
+```ts
+import { EExportFormat } from "@etiennea20/adr-nest/export";
+import { z } from "zod";
+
+const exportQuerySchema = z.object({ format: z.enum(EExportFormat).default("xlsx") });
+```
+
+### `EXPORT_CONTENT_TYPES`
+
+| Champ          | Valeur                                           |
+| -------------- | ------------------------------------------------ |
+| Catégorie      | `export`                                         |
+| Point d'entrée | `@etiennea20/adr-nest/export`                    |
+| Statut         | stable                                           |
+| Depuis         | 0.2.0                                            |
+| Source         | `src/export/export-format/export-format.ts`      |
+| Tests          | `src/export/export-format/export-format.test.ts` |
+
+**Signature**
+
+```ts
+const EXPORT_CONTENT_TYPES: Readonly<Record<EExportFormat, string>>;
+```
+
+**Description** : type de média de chaque format (`text/csv; charset=utf-8`, `application/x-ndjson; charset=utf-8`…).
+
+**Exemple**
+
+```ts
+import { EXPORT_CONTENT_TYPES } from "@etiennea20/adr-nest/export";
+
+EXPORT_CONTENT_TYPES.csv; // "text/csv; charset=utf-8"
+```
+
+## excel
+
+Sous-chemin `@etiennea20/adr-nest/excel` (peerDependencies optionnelles `fflate` ≥ 0.8 et `@etiennea20/adr-misc` ≥ 0.3) : export XLSX en flux, writer interne sur fflate (pas d'exceljs).
+
+### `toXlsxExport`
+
+| Champ          | Valeur                                            |
+| -------------- | ------------------------------------------------- |
+| Catégorie      | `excel`                                           |
+| Point d'entrée | `@etiennea20/adr-nest/excel`                      |
+| Statut         | stable                                            |
+| Depuis         | 0.2.0                                             |
+| Source         | `src/excel/to-xlsx-export/to-xlsx-export.ts`      |
+| Tests          | `src/excel/to-xlsx-export/to-xlsx-export.test.ts` |
+
+**Signature**
+
+```ts
+function toXlsxExport<T>(
+  rows: Iterable<T> | AsyncIterable<T>,
+  columns: readonly IExportColumn<T>[],
+  options?: IXlsxExportOptions,
+): AsyncGenerator<Uint8Array>;
+```
+
+**Description** : produit un classeur XLSX en flux (archive compressée au fil des lignes, par blocs de 64 Ko de XML) : un onglet, en-tête en gras, volet figé, filtre automatique, largeurs de colonnes, cellules typées au format français (`# ##0,00 €`, `jj/mm/aaaa`, `jj/mm/aaaa hh:mm` à l'heure de `timeZone`, VRAI / FAUX). Les dates antérieures au 1er mars 1900 sont écrites en texte. Aucune donnée n'est écrite en formule ; un texte qui ressemble à une formule reçoit le style `quotePrefix`, sauf colonne `trusted`.
+
+**Paramètres**
+
+- `rows` : lignes (tableau, itérable ou itérable asynchrone).
+- `columns` : colonnes (`defineExportColumns` de `@etiennea20/adr-nest/export`).
+- `options` : nom de l'onglet, fuseau horaire, limite de lignes.
+
+**Retour** : les morceaux binaires du fichier `.xlsx`.
+
+**Erreurs** : `ExportLimitExceededException` pendant le flux, au-delà de `maxRows`.
+
+**Exemple**
+
+```ts
+import { createExportFile } from "@etiennea20/adr-nest/export";
+import { toXlsxExport } from "@etiennea20/adr-nest/excel";
+
+return createExportFile(toXlsxExport(books, bookExportColumns, { sheetName: "Catalogue" }), {
+  format: "xlsx",
+  fileName: "Catalogue",
+});
+```
+
+### `IXlsxExportOptions`
+
+| Champ          | Valeur                                            |
+| -------------- | ------------------------------------------------- |
+| Catégorie      | `excel`                                           |
+| Point d'entrée | `@etiennea20/adr-nest/excel`                      |
+| Statut         | stable                                            |
+| Depuis         | 0.2.0                                             |
+| Source         | `src/excel/to-xlsx-export/to-xlsx-export.ts`      |
+| Tests          | `src/excel/to-xlsx-export/to-xlsx-export.test.ts` |
+
+**Signature**
+
+```ts
+interface IXlsxExportOptions extends IExportOptions {
+  readonly sheetName?: string | undefined;
+}
+```
+
+**Description** : options de l'export XLSX : nom de l'onglet (assaini, 31 caractères au plus, `Export` par défaut), plus `maxRows` et `timeZone`.
+
+**Exemple**
+
+```ts
+import type { IXlsxExportOptions } from "@etiennea20/adr-nest/excel";
+
+const options: IXlsxExportOptions = { sheetName: "Catalogue", maxRows: 10_000 };
 ```
 
 ## rights

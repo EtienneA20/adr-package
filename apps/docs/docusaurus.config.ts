@@ -75,7 +75,10 @@ const config: Config = {
   ],
 
   themes: ["@docusaurus/theme-live-codeblock"],
-  plugins: [typedocPlugin("nest", ["filtering", "prisma"]), typedocPlugin("misc", ["contract"])],
+  plugins: [
+    typedocPlugin("nest", ["filtering", "prisma", "export", "excel"]),
+    typedocPlugin("misc", ["contract"]),
+  ],
 
   themeConfig: {
     // Bascule à deux états (clair / sombre) : le thème du système n'est pas suivi.

@@ -41,9 +41,13 @@ générée depuis le TSDoc.
 - Toute autre dépendance (par exemple une bibliothèque Excel pour la catégorie `export`) doit
   être demandée avant ajout, avec le choix dependency / peerDependency (optionnelle ?).
 - peerDependencies **optionnelles** (`peerDependenciesMeta`) : `@etiennea20/adr-misc`
-  (`>=0.3.0 <1.0.0`, contrat de liste) et `zod` (`^4.0.0`), réservées au sous-chemin `filtering`
-  (ESLint `optionalPeers`, zone `src/{filtering/**,**/*.test.ts}` : les tests peuvent aussi les
-  importer). L'entrée principale n'importe **ni** zod **ni** adr-misc.
+  (`>=0.3.0 <1.0.0`), `zod` (`^4.0.0`) et `fflate` (`^0.8.0`), chacune réservée aux sous-chemins
+  qui l'utilisent (ESLint `optionalPeers`, une ou plusieurs zones par peer ; les tests peuvent
+  toutes les importer). L'entrée principale n'en importe aucune.
+- Export XLSX : writer interne sur fflate (zip en flux), choisi plutôt qu'exceljs (plus de
+  version depuis 2023, dépendances obsolètes et vulnérables) ou write-excel-file (tout en
+  mémoire). Toute évolution (nouveau type de cellule, style) se teste en décompressant le
+  fichier produit.
 - Les mêmes en devDependencies, pour les tests (dont le test anti-divergence du format d'erreur).
 
 ## Points d'entrée
@@ -63,13 +67,14 @@ générée depuis le TSDoc.
 
 ## Catégories
 
-| Dossier          | Contenu                                                             |
-| ---------------- | ------------------------------------------------------------------- |
-| `src/common/`    | Format d'erreur d'API, exceptions, validation, éléments transverses |
-| `src/rights/`    | Gestion des droits : routes publiques, rôles, permissions, guards   |
-| `src/filtering/` | Sous-chemin `./filtering` : requête de liste → critères neutres     |
-| `src/prisma/`    | Sous-chemin `./prisma` : critères → arguments Prisma (sans import)  |
-| `src/export/`    | Export Excel et JSON (services, interceptors, formats)              |
+| Dossier          | Contenu                                                               |
+| ---------------- | --------------------------------------------------------------------- |
+| `src/common/`    | Format d'erreur d'API, exceptions, validation, éléments transverses   |
+| `src/rights/`    | Gestion des droits : routes publiques, rôles, permissions, guards     |
+| `src/filtering/` | Sous-chemin `./filtering` : requête de liste → critères neutres       |
+| `src/prisma/`    | Sous-chemin `./prisma` : critères → arguments Prisma (sans import)    |
+| `src/export/`    | Sous-chemin `./export` : JSON, NDJSON, CSV, réponse de téléchargement |
+| `src/excel/`     | Sous-chemin `./excel` : XLSX en flux (writer interne sur fflate)      |
 
 Une catégorie n'est réexportée par `src/index.ts` qu'avec son premier élément. Si une catégorie
 dépasse une quinzaine d'éléments, proposer de la diviser.
