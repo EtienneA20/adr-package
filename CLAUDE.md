@@ -26,13 +26,14 @@ qui **complète** celui-ci sans le répéter.
 ├── .github/             # workflows CI/CD, dependabot, modèle de PR
 ├── .husky/              # hooks Git (pre-commit : lint-staged, commit-msg : commitlint)
 ├── apps/
-│   └── docs/            # documentation Docusaurus + playground live (privé, jamais publié)
+│   ├── docs/            # documentation Docusaurus + playground live (privé, jamais publié)
+│   └── example-nest/    # application NestJS fictive « Bibliothèque », compilée et testée (privée)
 ├── packages/
 │   ├── adr-react/       # @etiennea20/adr-react : composants et hooks React
 │   ├── adr-nest/        # @etiennea20/adr-nest : utilitaires NestJS
 │   ├── adr-misc/        # @etiennea20/adr-misc : utilitaires partagés front et back
 │   └── config/          # @etiennea20/config : ESLint, Vitest, TSDoc partagés (privé)
-├── scripts/             # check-skills, install-skills, templates/ (bin des packages)
+├── scripts/             # check-skills, install-skills, sync-doc-snippets, templates/
 ├── eslint.config.js     # lint des fichiers de la racine
 ├── pnpm-workspace.yaml  # workspaces, catalog de versions, allowBuilds
 ├── tsconfig.base.json   # options TypeScript communes (strictes)
@@ -52,6 +53,7 @@ qui **complète** celui-ci sans le répéter.
 | `pnpm test`                    | Vitest avec couverture et seuil (90 %)                                             |
 | `pnpm check:skills`            | Vérifie que chaque export public a un TSDoc complet et une entrée dans `SKILLS.md` |
 | `pnpm run install:skills`      | Régénère `.claude/skills/` depuis les `SKILLS.md` (`--check` en CI)                |
+| `pnpm run sync:snippets`       | Recopie dans la doc les extraits de `apps/example-nest` (`--check` en CI)          |
 | `pnpm changeset`               | Décrit un changement de version d'un package publié                                |
 
 Toujours écrire `pnpm run install:skills` (et non `pnpm install:skills`) pour éviter toute

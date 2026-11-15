@@ -91,3 +91,6 @@ jobs:
 
       - name: Skills Claude Code synchronisés
         run: pnpm run install:skills --check
+
+      - name: Extraits de code de la documentation synchronisés avec apps/example-nest
+        run: pnpm run sync:snippets --check

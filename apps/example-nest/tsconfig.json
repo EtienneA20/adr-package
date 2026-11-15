@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Sortie CommonJS (écosystème NestJS) : package "type": "commonjs" + module node20.
+    "module": "Node20",
+    "moduleResolution": "Node16",
+    "types": ["node"],
+
+    // Décorateurs « legacy » et métadonnées de type (design:paramtypes) requis par l'injection
+    // de dépendances de NestJS. Volontairement absents du tsconfig de base.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    // Incompatibles avec NestJS : propriétés de paramètres (`constructor(private x: X)`) et
+    // syntaxe `import` compilée en `require`.
+    "erasableSyntaxOnly": false,
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src", "vitest.setup.ts"]
+}

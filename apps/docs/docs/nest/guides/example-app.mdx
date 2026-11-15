@@ -1,0 +1,44 @@
+---
+title: Application d'exemple
+sidebar_position: 1
+---
+
+# Application d'exemple « Bibliothèque »
+
+Les guides d'adr-nest s'appuient sur une application NestJS fictive de gestion de
+bibliothèque : un catalogue de livres, des adhérents, des emprunts. Son code vit dans le dépôt,
+dans `apps/example-nest` : il est **compilé, linté et testé** à chaque intégration, comme les
+packages. Les extraits de code des guides en sont recopiés automatiquement : un exemple de la
+documentation ne peut donc pas diverger du code qui fonctionne.
+
+## Organisation
+
+| Dossier       | Contenu                                                           |
+| ------------- | ----------------------------------------------------------------- |
+| `src/auth/`   | Guard global d'authentification (lit `@Public()`)                 |
+| `src/books/`  | Catalogue : contrôleur, service, dépôt en mémoire                 |
+| `src/health/` | Route de santé, publique                                          |
+| `*.test.ts`   | Tests Vitest avec `Test.createTestingModule`, sans base ni réseau |
+
+L'application n'a pas de base de données : un dépôt en mémoire tient le catalogue, pour que
+l'exemple tourne partout (poste local, CI, image Docker). Une vraie application le remplace par
+son ORM.
+
+## Lancer les tests de l'exemple
+
+```sh
+pnpm --filter @etiennea20/example-nest test
+```
+
+## Pour les contributeurs
+
+Dans une page de documentation, un marqueur placé avant un bloc de code désigne l'extrait à
+recopier : un fichier de l'exemple et, en option, une région délimitée par
+`// #region <nom>` et `// #endregion <nom>`.
+
+```mdx
+{/* snippet: apps/example-nest/src/books/books.controller.ts#public-routes */}
+```
+
+Après une modification de l'exemple, `pnpm run sync:snippets` met les pages à jour ;
+`pnpm run sync:snippets --check` (lancé en CI) échoue si une page n'est plus synchronisée.

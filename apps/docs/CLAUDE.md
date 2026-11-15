@@ -33,6 +33,11 @@ dans une seule interface, avec un playground live pour `adr-react`.
   « Bibliothèque »). La référence API (`docs/<section>/api/`) est **générée** par
   `docusaurus-plugin-typedoc` depuis le TSDoc à chaque `dev` / `build` : ne jamais l'éditer,
   elle est ignorée par Git et Prettier.
+- **Exemples d'adr-nest** : le code des guides vient de l'application compilée et testée
+  `apps/example-nest`. Un marqueur `{/* snippet: apps/example-nest/src/<fichier>.ts#<région> */}`
+  précède le bloc de code ; `pnpm run sync:snippets` le remplit (ne pas l'éditer à la main),
+  `--check` tourne en CI. Les pages sont commitées : le build (local, Docker) n'a pas besoin
+  de l'exemple.
 - **Sous-chemins d'un package backend** (`@etiennea20/adr-misc/contract`) : les déclarer dans
   `typedocPlugin(section, subpaths)` ; chaque point d'entrée porte un commentaire de fichier
   `@packageDocumentation` + `@module <nom>` (tag déclaré dans `@etiennea20/config/tsdoc.json`),
