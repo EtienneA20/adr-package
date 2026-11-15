@@ -1,0 +1,129 @@
+---
+title: Exports JSON, CSV et Excel
+---
+
+# Exports JSON, CSV et Excel
+
+Deux sous-chemins produisent des fichiers à télécharger, **en flux** (jamais entièrement en
+mémoire) :
+
+| Sous-chemin                   | Formats                       | À installer en plus              |
+| ----------------------------- | ----------------------------- | -------------------------------- |
+| `@etiennea20/adr-nest/export` | JSON, NDJSON, CSV (Excel, fr) | `@etiennea20/adr-misc`           |
+| `@etiennea20/adr-nest/excel`  | XLSX                          | `@etiennea20/adr-misc`, `fflate` |
+
+**Garanties** : seules les colonnes déclarées sortent de l'application (liste blanche) ; les
+textes saisis par les utilisateurs ne peuvent pas devenir des formules dans le tableur
+(injection de formules, testée pour chaque motif) ; le nom du fichier est assaini avant d'être
+écrit dans l'en-tête `Content-Disposition`.
+
+Les extraits viennent de l'[application d'exemple](./example-app).
+
+## 1. Déclarer les colonnes
+
+{/* snippet: apps/example-nest/src/books/book-export.ts#columns */}
+
+```ts title="src/books/book-export.ts"
+// Liste blanche de ce qui sort de l'application : jamais l'emprunteur ni les notes internes.
+export const bookExportColumns = defineExportColumns<IBook>([
+  { key: "title", header: "Titre", width: 40 },
+  { key: "authorName", header: "Auteur", width: 25 },
+  {
+    key: "status",
+    header: "Statut",
+    value: (book) => (book.status === "available" ? "Disponible" : "Emprunté"),
+  },
+  { key: "publishedAt", header: "Publication", type: "date" },
+  { key: "id", header: "Identifiant", trusted: true },
+]);
+```
+
+| Type       | XLSX                            | CSV                | JSON     |
+| ---------- | ------------------------------- | ------------------ | -------- |
+| `text`     | texte                           | texte              | texte    |
+| `number`   | nombre                          | `12,5`             | nombre   |
+| `currency` | nombre, format `# ##0,00 €`     | `12,5`             | nombre   |
+| `date`     | date, format `jj/mm/aaaa`       | `31/01/2026`       | ISO 8601 |
+| `datetime` | date, format `jj/mm/aaaa hh:mm` | `31/01/2026 10:00` | ISO 8601 |
+| `boolean`  | VRAI / FAUX                     | `oui` / `non`      | booléen  |
+
+Les dates et heures sont écrites à l'heure de Paris (option `timeZone`). Excel ne sait pas
+représenter les dates antérieures au 1er mars 1900 : elles sont écrites en texte
+(`03/04/1862`).
+
+## 2. Choisir le format
+
+{/* snippet: apps/example-nest/src/books/book-export.ts#stream */}
+
+```ts title="src/books/book-export.ts"
+export function bookExportStream(
+  format: EExportFormat,
+  books: readonly IBook[],
+  columns: readonly IExportColumn<IBook>[],
+): AsyncIterable<string | Uint8Array> {
+  switch (format) {
+    case "xlsx":
+      return toXlsxExport(books, columns, { sheetName: "Catalogue" });
+    case "csv":
+      return toCsvExport(books, columns);
+    case "ndjson":
+      return toNdjsonExport(books, columns);
+    default:
+      return toJsonExport(books, columns);
+  }
+}
+```
+
+## 3. La route d'export
+
+La route réutilise le contrat de la liste : le client exporte exactement ce qu'il voit (filtre,
+recherche, tri) et peut restreindre les colonnes avec `fields`, sans sortir de la liste
+blanche.
+
+{/* snippet: apps/example-nest/src/books/books.controller.ts#export-route */}
+
+```ts title="src/books/books.controller.ts"
+@Get("export") // GET /livres/export?format=csv&filter=…&fields=["title","publishedAt"]
+@ExportHeaders()
+export(
+  @ValidQuery(exportQuerySchema) query: ExportQuery,
+  @ListQuery(bookListQuery) criteria: IListCriteria,
+): StreamableFile {
+  const books = this.books.findAllMatching(criteria);
+  assertExportSize(books.length, 10_000); // avant l'envoi : une vraie 400 si trop gros
+  const columns = selectExportColumns(bookExportColumns, criteria.select);
+  return createExportFile(bookExportStream(query.format, books, columns), {
+    format: query.format,
+    fileName: "Catalogue de la bibliothèque",
+  });
+}
+```
+
+- **Taille** : `assertExportSize` refuse l'export **avant** l'envoi (400
+  `EXPORT_LIMIT_EXCEEDED`, au format d'erreur d'API). Les formats s'arrêtent aussi d'eux-mêmes
+  au-delà de `maxRows` (50 000 par défaut), mais une fois l'envoi commencé, l'erreur ne peut
+  que tronquer le fichier.
+- **Gros volumes** : les formats acceptent un itérable asynchrone (curseur d'ORM, pages lues
+  une à une) ; l'XLSX est compressé et envoyé par blocs.
+- **En-têtes** : `createExportFile` pose `Content-Type` et `Content-Disposition` (nom en ASCII
+  et en UTF-8) ; `@ExportHeaders()` ajoute `nosniff` et `no-store`.
+
+## Injection de formules
+
+Un titre saisi `=HYPERLINK("https://pirate.example";"Cliquez")` deviendrait un lien piégé à
+l'ouverture du fichier. Les mêmes motifs que `escapeSpreadsheetFormula` d'adr-misc sont
+traités (`=`, `+`, `-`, `@`, tabulation, retour chariot, variantes pleine chasse) :
+
+- **CSV** : le texte est préfixé d'une apostrophe (`'=HYPERLINK(…)`).
+- **XLSX** : aucune donnée n'est écrite en formule (cellules texte) ; un texte qui ressemble à
+  une formule reçoit en plus le style « préfixe de citation », qui le garde en texte même si
+  l'utilisateur modifie la cellule ou réenregistre le fichier en CSV.
+- Les nombres ne sont pas concernés ; une colonne `trusted: true` (identifiant, code produit
+  par le serveur) n'est pas modifiée.
+
+## Pourquoi un writer XLSX maison ?
+
+exceljs, la bibliothèque la plus connue, n'a plus de version depuis 2023 et embarque des
+dépendances obsolètes ou vulnérables ; write-excel-file construit tout le fichier en mémoire.
+Le writer d'adr-nest s'appuie sur fflate (compression zip en flux, sans dépendance) et
+n'écrit que ce dont un export a besoin : un onglet, des cellules typées, quatre formats.

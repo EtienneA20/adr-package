@@ -30,6 +30,12 @@ pnpm add @etiennea20/adr-misc zod
 ```
 
 `@etiennea20/adr-nest/prisma` (adaptateur Prisma) n'ajoute aucune dépendance.
+`@etiennea20/adr-nest/export` (JSON, NDJSON, CSV) exige `@etiennea20/adr-misc` ;
+`@etiennea20/adr-nest/excel` (XLSX) exige en plus `fflate` (≥ 0.8) :
+
+```sh
+pnpm add @etiennea20/adr-misc fflate
+```
 
 ## Exemple minimal
 

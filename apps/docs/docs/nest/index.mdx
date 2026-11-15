@@ -17,11 +17,13 @@ pnpm add @etiennea20/adr-nest
 peerDependencies (déjà présentes dans une application NestJS) : `@nestjs/common`,
 `@nestjs/core`, `reflect-metadata`, `rxjs`.
 
-| Point d'entrée                   | Contenu                                     | À installer en plus            |
-| -------------------------------- | ------------------------------------------- | ------------------------------ |
-| `@etiennea20/adr-nest`           | Format d'erreur d'API, validation, droits   | rien                           |
-| `@etiennea20/adr-nest/filtering` | Requêtes de liste (filtre, tri, pagination) | `@etiennea20/adr-misc`, `zod`  |
-| `@etiennea20/adr-nest/prisma`    | Adaptateur Prisma des critères de liste     | rien (Prisma est déjà présent) |
+| Point d'entrée                   | Contenu                                     | À installer en plus              |
+| -------------------------------- | ------------------------------------------- | -------------------------------- |
+| `@etiennea20/adr-nest`           | Format d'erreur d'API, validation, droits   | rien                             |
+| `@etiennea20/adr-nest/filtering` | Requêtes de liste (filtre, tri, pagination) | `@etiennea20/adr-misc`, `zod`    |
+| `@etiennea20/adr-nest/prisma`    | Adaptateur Prisma des critères de liste     | rien (Prisma est déjà présent)   |
+| `@etiennea20/adr-nest/export`    | Exports JSON, NDJSON, CSV en flux           | `@etiennea20/adr-misc`           |
+| `@etiennea20/adr-nest/excel`     | Export XLSX en flux                         | `@etiennea20/adr-misc`, `fflate` |
 
 - **Guides** : cas d'usage complets, avec un exemple d'application fictive.
 - **Référence API** : générée depuis le TSDoc du code source.

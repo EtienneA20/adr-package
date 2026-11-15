@@ -1,4 +1,5 @@
 export * from "./book";
+export * from "./book-export";
 export * from "./book-list-query";
 export * from "./book.schemas";
 export * from "./books.controller";

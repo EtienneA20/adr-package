@@ -1,10 +1,22 @@
 // #region public-routes
 import type { IPage } from "@etiennea20/adr-misc/contract";
-import { Public, ValidBody } from "@etiennea20/adr-nest";
+import { Public, ValidBody, ValidQuery } from "@etiennea20/adr-nest";
+import {
+  ExportHeaders,
+  assertExportSize,
+  createExportFile,
+  selectExportColumns,
+} from "@etiennea20/adr-nest/export";
 import { type IListCriteria, ListQuery } from "@etiennea20/adr-nest/filtering";
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, type StreamableFile } from "@nestjs/common";
 
 import type { IBook } from "./book";
+import {
+  type ExportQuery,
+  bookExportColumns,
+  bookExportStream,
+  exportQuerySchema,
+} from "./book-export";
 import { bookListQuery } from "./book-list-query";
 import {
   type CreateBookInput,
@@ -31,6 +43,23 @@ export class BooksController {
     return this.books.findPage(criteria);
   }
   // #endregion list-routes
+
+  // #region export-route
+  @Get("export") // GET /livres/export?format=csv&filter=…&fields=["title","publishedAt"]
+  @ExportHeaders()
+  export(
+    @ValidQuery(exportQuerySchema) query: ExportQuery,
+    @ListQuery(bookListQuery) criteria: IListCriteria,
+  ): StreamableFile {
+    const books = this.books.findAllMatching(criteria);
+    assertExportSize(books.length, 10_000); // avant l'envoi : une vraie 400 si trop gros
+    const columns = selectExportColumns(bookExportColumns, criteria.select);
+    return createExportFile(bookExportStream(query.format, books, columns), {
+      format: query.format,
+      fileName: "Catalogue de la bibliothèque",
+    });
+  }
+  // #endregion export-route
 
   @Get(":id") // le détail (avec l'emprunteur) est réservé aux utilisateurs connectés
   get(@Param("id") id: string): IBook {

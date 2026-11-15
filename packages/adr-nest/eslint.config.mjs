@@ -1,14 +1,15 @@
 import { defineAdrConfig } from "@etiennea20/config/eslint";
 
-// zod et adr-misc sont des peerDependencies optionnelles : réservées au sous-chemin `filtering`
-// (et aux tests, jamais publiés). `prisma` n'en importe que des types, via `../../filtering`.
-const OPTIONAL_PEERS_ZONE = "src/{filtering/**,**/*.test.ts}";
-
+// PeerDependencies optionnelles : chacune réservée aux sous-chemins qui l'utilisent (les tests
+// peuvent toutes les importer). L'entrée principale (common, rights) n'en importe aucune ;
+// `prisma` n'importe que des types, via `../../filtering`.
 export default defineAdrConfig({
   tsconfigRootDir: import.meta.dirname,
   preset: "nest",
   optionalPeers: [
-    { name: "zod", allowedIn: OPTIONAL_PEERS_ZONE },
-    { name: "@etiennea20/adr-misc/contract", allowedIn: OPTIONAL_PEERS_ZONE },
+    { name: "zod", allowedIn: "src/filtering/**" },
+    { name: "@etiennea20/adr-misc/contract", allowedIn: "src/filtering/**" },
+    { name: "@etiennea20/adr-misc", allowedIn: ["src/export/**", "src/excel/**"] },
+    { name: "fflate", allowedIn: "src/excel/**" },
   ],
 });
