@@ -1,3 +1,5 @@
+// Import entre catégories justifié : une seule règle de neutralisation des formules (`string`).
+import { escapeSpreadsheetFormula } from "../../string";
 import { assertCsvDelimiter } from "../csv-delimiter";
 
 /**
@@ -49,8 +51,9 @@ export interface IToCsvOptions {
    */
   readonly decimalSeparator?: "," | ".";
   /**
-   * Préfixe d'une apostrophe les textes qui commencent par `=`, `+`, `-`, `@`, une tabulation
-   * ou un retour chariot, pour qu'Excel ne les exécute pas comme des formules (injection CSV).
+   * Préfixe d'une apostrophe les textes qui commencent par `=`, `+`, `-`, `@`, une tabulation,
+   * un retour chariot ou une variante pleine chasse (`＝`, `＋`, `－`, `＠`), pour qu'un tableur ne
+   * les exécute pas comme des formules (injection CSV, voir `escapeSpreadsheetFormula`).
    * À activer pour exporter des données saisies par des utilisateurs.
    *
    * @defaultValue `false`
@@ -70,9 +73,6 @@ interface ICellOptions {
   /** Neutralise les formules. */
   readonly escapeFormulas: boolean;
 }
-
-/** Début de texte interprété comme une formule par les tableurs. */
-const FORMULA_PATTERN = /^[=+\-@\t\r]/;
 
 /**
  * Indique si une ligne est un tableau de valeurs (`Array.isArray` n'affine pas les tableaux
@@ -95,7 +95,7 @@ function isArrayRow(row: CsvRow): row is readonly unknown[] {
 function stringifyValue(value: unknown, options: ICellOptions): string {
   switch (typeof value) {
     case "string":
-      return options.escapeFormulas && FORMULA_PATTERN.test(value) ? `'${value}` : value;
+      return options.escapeFormulas ? escapeSpreadsheetFormula(value) : value;
     case "number":
       return Number.isFinite(value) ? String(value).replace(".", options.decimalSeparator) : "";
     case "boolean":
