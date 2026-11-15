@@ -25,7 +25,7 @@ Utilitaires sans dépendance d'environnement, utilisables dans le navigateur com
 - [async](#async) : promesses, minuteries et concurrence (`createDeferred`, `debounce`, `IDebouncedFunction`, `IDeferred`, `IRetryOptions`, `IThrottledFunction`, `IWaitUntilOptions`, `mapConcurrent`, `retry`, `sleep`, `throttle`, `TimeoutError`, `waitUntil`, `withTimeout`)
 - [array](#array) : tableaux (`chunk`, `compact`, `countBy`, `difference`, `groupBy`, `intersection`, `ISortByCriterion`, `keyBy`, `moveItem`, `partition`, `range`, `sortBy`, `SortByCriterion`, `SortByValue`, `toggleItem`, `unique`, `uniqueBy`, `zip`)
 - [object](#object) : objets (`deepClone`, `deepMerge`, `DeepMergePatch`, `flattenObject`, `getPath`, `invert`, `IRemoveUndefinedOptions`, `isEqual`, `mapValues`, `ObjectEntry`, `omit`, `omitBy`, `PathValue`, `pick`, `pickBy`, `removeUndefined`, `setPath`, `typedEntries`, `unflattenObject`)
-- [string](#string) : chaînes de caractères (`IGetInitialsOptions`, `IHighlightSegment`, `IInterpolateOptions`, `IMaskStringOptions`, `IPluralizeOptions`, `ISlugifyOptions`, `ITruncateOptions`, `InterpolateValues`, `compareStrings`, `countWords`, `escapeHtml`, `escapeRegExp`, `getInitials`, `highlightMatches`, `interpolate`, `maskString`, `matchesSearch`, `normalizeWhitespace`, `pluralize`, `removeAccents`, `slugify`, `truncate`, `unescapeHtml`)
+- [string](#string) : chaînes de caractères (`IGetInitialsOptions`, `IHighlightSegment`, `IInterpolateOptions`, `IMaskStringOptions`, `IPluralizeOptions`, `ISlugifyOptions`, `ITruncateOptions`, `InterpolateValues`, `compareStrings`, `countWords`, `escapeHtml`, `escapeRegExp`, `escapeSpreadsheetFormula`, `getInitials`, `highlightMatches`, `interpolate`, `isSpreadsheetFormula`, `maskString`, `matchesSearch`, `normalizeWhitespace`, `pluralize`, `removeAccents`, `slugify`, `truncate`, `unescapeHtml`)
 - [case](#case) : changement de casse (`ICapitalizeOptions`, `IToTitleCaseOptions`, `capitalize`, `toCamelCase`, `toConstantCase`, `toKebabCase`, `toPascalCase`, `toSnakeCase`, `toTitleCase`, `uncapitalize`)
 - [math](#math) : calculs numériques (`average`, `clamp`, `inRange`, `lerp`, `maxBy`, `median`, `minBy`, `percentage`, `round`, `roundToStep`, `sum`, `sumBy`)
 - [random](#random) : aléatoire et identifiants (`createSeededRandom`, `createUuid`, `IRandomStringOptions`, `randomFloat`, `randomInt`, `randomItem`, `randomString`, `sample`, `shuffle`)
@@ -4518,6 +4518,80 @@ unescapeHtml("L&#x27;&eacute;l&egrave;ve"); // "L'élève"
 unescapeHtml("&laquo;&nbsp;Bonjour&nbsp;&raquo;"); // "« Bonjour »"
 ```
 
+### `isSpreadsheetFormula`
+
+| Champ          | Valeur                                                                     |
+| -------------- | -------------------------------------------------------------------------- |
+| Catégorie      | `string`                                                                   |
+| Point d'entrée | `@etiennea20/adr-misc`                                                     |
+| Statut         | stable                                                                     |
+| Depuis         | 0.3.0                                                                      |
+| Source         | `src/string/escape-spreadsheet-formula/escape-spreadsheet-formula.ts`      |
+| Tests          | `src/string/escape-spreadsheet-formula/escape-spreadsheet-formula.test.ts` |
+
+**Signature**
+
+```ts
+function isSpreadsheetFormula(value: string): boolean;
+```
+
+**Description** : indique si un texte serait interprété comme une formule par un tableur : `=`, `+`, `-`, `@`, tabulation ou retour chariot en première position, ou variante pleine chasse (`＝`, `＋`, `－`, `＠`). À utiliser pour décider de neutraliser une cellule d'export issue d'une saisie utilisateur.
+
+**Paramètres**
+
+- `value` : texte d'une cellule.
+
+**Retour** : `true` si le texte commence par un caractère de formule.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { isSpreadsheetFormula } from "@etiennea20/adr-misc";
+
+isSpreadsheetFormula('=HYPERLINK("https://pirate.example")'); // true
+isSpreadsheetFormula("＝1+1"); // true (pleine chasse)
+isSpreadsheetFormula("Les Misérables"); // false
+```
+
+### `escapeSpreadsheetFormula`
+
+| Champ          | Valeur                                                                     |
+| -------------- | -------------------------------------------------------------------------- |
+| Catégorie      | `string`                                                                   |
+| Point d'entrée | `@etiennea20/adr-misc`                                                     |
+| Statut         | stable                                                                     |
+| Depuis         | 0.3.0                                                                      |
+| Source         | `src/string/escape-spreadsheet-formula/escape-spreadsheet-formula.ts`      |
+| Tests          | `src/string/escape-spreadsheet-formula/escape-spreadsheet-formula.test.ts` |
+
+**Signature**
+
+```ts
+function escapeSpreadsheetFormula(value: string): string;
+```
+
+**Description** : neutralise un texte qui serait interprété comme une formule par un tableur (injection de formules, « CSV injection ») en le préfixant d'une apostrophe ; même détection que `isSpreadsheetFormula`. À appliquer à chaque cellule texte d'un export (CSV, XLSX) dont le contenu vient d'utilisateurs. L'apostrophe force l'affichage en texte et reste visible pour un autre programme. Ne pas l'appliquer aux nombres (un nombre négatif n'est pas une formule). Utilisée par `toCsv` (`escapeFormulas`).
+
+**Paramètres**
+
+- `value` : texte d'une cellule.
+
+**Retour** : le texte préfixé de `'` s'il commence par un caractère de formule, sinon inchangé.
+
+**Erreurs** : aucune.
+
+**Exemple**
+
+```ts
+import { escapeSpreadsheetFormula } from "@etiennea20/adr-misc";
+
+escapeSpreadsheetFormula("=1+1"); // "'=1+1"
+escapeSpreadsheetFormula("@SUM(A1)"); // "'@SUM(A1)"
+escapeSpreadsheetFormula("Germinal"); // "Germinal"
+```
+
 ## case
 
 ### `ICapitalizeOptions`
@@ -5750,7 +5824,7 @@ interface IToCsvOptions {
 }
 ```
 
-**Description** : options de `toCsv`. `delimiter` (défaut `";"`, un seul caractère) ; `columns` choisit et ordonne les clés des lignes objets (défaut : toutes les clés dans l'ordre d'apparition) ou donne la ligne d'en-têtes des lignes tableaux (défaut : aucune) ; `includeHeader` (défaut `true`) ; `bom` ajoute le BOM UTF-8 pour qu'Excel affiche les accents (défaut `false`) ; `lineSeparator` (défaut `"\r\n"`) ; `decimalSeparator` des nombres (défaut `","`) ; `escapeFormulas` préfixe d'une apostrophe les textes commençant par `=`, `+`, `-`, `@`, tabulation ou retour chariot, contre l'injection de formules (défaut `false`, à activer pour des données saisies par des utilisateurs).
+**Description** : options de `toCsv`. `delimiter` (défaut `";"`, un seul caractère) ; `columns` choisit et ordonne les clés des lignes objets (défaut : toutes les clés dans l'ordre d'apparition) ou donne la ligne d'en-têtes des lignes tableaux (défaut : aucune) ; `includeHeader` (défaut `true`) ; `bom` ajoute le BOM UTF-8 pour qu'Excel affiche les accents (défaut `false`) ; `lineSeparator` (défaut `"\r\n"`) ; `decimalSeparator` des nombres (défaut `","`) ; `escapeFormulas` préfixe d'une apostrophe les textes commençant par `=`, `+`, `-`, `@`, tabulation, retour chariot ou une variante pleine chasse (`＝`, `＋`, `－`, `＠`), contre l'injection de formules (voir `escapeSpreadsheetFormula`) (défaut `false`, à activer pour des données saisies par des utilisateurs).
 
 **Exemple**
 

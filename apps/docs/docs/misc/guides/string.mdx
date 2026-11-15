@@ -193,25 +193,48 @@ const pattern = new RegExp(`^${escapeRegExp("Tome 2 (poche)")}$`, "i");
 pattern.test("tome 2 (poche)"); // true
 ```
 
+## Neutraliser les formules d'un export
+
+Un texte saisi par un utilisateur (titre, commentaire) qui commence par `=`, `+`, `-` ou `@`
+est exécuté comme une formule quand le fichier est ouvert dans un tableur : lien piégé,
+exfiltration de données, commande DDE. `escapeSpreadsheetFormula` préfixe ces textes d'une
+apostrophe, qui force l'affichage en texte ; `isSpreadsheetFormula` les détecte. Les
+variantes pleine chasse (`＝`, `＋`, `－`, `＠`), que certains tableurs convertissent, sont
+traitées aussi.
+
+```ts title="src/exports/loans-export.ts"
+import { escapeSpreadsheetFormula, toCsv } from "@etiennea20/adr-misc";
+
+escapeSpreadsheetFormula('=HYPERLINK("https://pirate.example","Cliquez")');
+// `'=HYPERLINK("https://pirate.example","Cliquez")`
+
+// toCsv applique la même règle à chaque cellule texte avec escapeFormulas.
+toCsv([{ titre: "=1+1", pages: -3 }], { escapeFormulas: true }); // "titre;pages\r\n'=1+1;-3"
+```
+
+Les nombres ne sont pas concernés : un nombre négatif reste un nombre.
+
 ## Récapitulatif
 
-| Élément               | Rôle                                                                  |
-| --------------------- | --------------------------------------------------------------------- |
-| `compareStrings`      | Comparer deux textes dans l'ordre alphabétique français (tri)         |
-| `countWords`          | Compter les mots d'un texte                                           |
-| `escapeHtml`          | Échapper `&`, `<`, `>`, `"` et `'` avant une insertion dans du HTML   |
-| `escapeRegExp`        | Échapper les caractères spéciaux d'une expression régulière           |
-| `getInitials`         | Calculer les initiales d'un nom de personne                           |
-| `highlightMatches`    | Découper un texte en segments à surligner selon une recherche         |
-| `interpolate`         | Remplacer les marqueurs `{cle}` d'un modèle de texte                  |
-| `maskString`          | Masquer une valeur sensible (IBAN, téléphone, e-mail)                 |
-| `matchesSearch`       | Tester si un texte correspond à une recherche, sans casse ni accents  |
-| `normalizeWhitespace` | Réduire toute suite d'espaces à une espace simple et rogner les bords |
-| `pluralize`           | Accorder un mot selon un nombre, avec la règle française              |
-| `removeAccents`       | Retirer les accents et décomposer les ligatures                       |
-| `slugify`             | Transformer un texte libre en slug d'URL ou de nom de fichier         |
-| `truncate`            | Tronquer un texte trop long en ajoutant un suffixe                    |
-| `unescapeHtml`        | Décoder les entités HTML d'un texte                                   |
+| Élément                    | Rôle                                                                  |
+| -------------------------- | --------------------------------------------------------------------- |
+| `compareStrings`           | Comparer deux textes dans l'ordre alphabétique français (tri)         |
+| `countWords`               | Compter les mots d'un texte                                           |
+| `escapeHtml`               | Échapper `&`, `<`, `>`, `"` et `'` avant une insertion dans du HTML   |
+| `escapeRegExp`             | Échapper les caractères spéciaux d'une expression régulière           |
+| `escapeSpreadsheetFormula` | Neutraliser un texte qui serait exécuté comme formule par un tableur  |
+| `getInitials`              | Calculer les initiales d'un nom de personne                           |
+| `highlightMatches`         | Découper un texte en segments à surligner selon une recherche         |
+| `interpolate`              | Remplacer les marqueurs `{cle}` d'un modèle de texte                  |
+| `isSpreadsheetFormula`     | Détecter un texte qui serait exécuté comme formule par un tableur     |
+| `maskString`               | Masquer une valeur sensible (IBAN, téléphone, e-mail)                 |
+| `matchesSearch`            | Tester si un texte correspond à une recherche, sans casse ni accents  |
+| `normalizeWhitespace`      | Réduire toute suite d'espaces à une espace simple et rogner les bords |
+| `pluralize`                | Accorder un mot selon un nombre, avec la règle française              |
+| `removeAccents`            | Retirer les accents et décomposer les ligatures                       |
+| `slugify`                  | Transformer un texte libre en slug d'URL ou de nom de fichier         |
+| `truncate`                 | Tronquer un texte trop long en ajoutant un suffixe                    |
+| `unescapeHtml`             | Décoder les entités HTML d'un texte                                   |
 
 Les options de chaque fonction sont décrites par une interface exportée (`ITruncateOptions`,
 `IPluralizeOptions`…), et `highlightMatches` renvoie des `IHighlightSegment`.

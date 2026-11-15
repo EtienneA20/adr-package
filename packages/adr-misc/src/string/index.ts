@@ -2,6 +2,7 @@ export * from "./compare-strings";
 export * from "./count-words";
 export * from "./escape-html";
 export * from "./escape-reg-exp";
+export * from "./escape-spreadsheet-formula";
 export * from "./get-initials";
 export * from "./highlight-matches";
 export * from "./interpolate";
