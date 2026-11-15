@@ -79,3 +79,15 @@ describe("toCsv", () => {
     expect(() => toCsv([["a"]], { delimiter })).toThrow(RangeError);
   });
 });
+
+describe("toCsv : injection de formules", () => {
+  it("neutralise aussi les variantes pleine chasse", () => {
+    expect(toCsv([["＝1+1", "＠x", "＋1", "－1"]], { escapeFormulas: true })).toBe(
+      "'＝1+1;'＠x;'＋1;'－1",
+    );
+  });
+
+  it("ne modifie rien sans escapeFormulas", () => {
+    expect(toCsv([["=1+1"]])).toBe("=1+1");
+  });
+});
