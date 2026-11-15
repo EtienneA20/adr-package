@@ -1,0 +1,106 @@
+---
+title: Erreurs et journalisation
+---
+
+# Erreurs et journalisation
+
+Deux éléments globaux complètent le [format d'erreur d'API](./validation) :
+
+| Élément                     | Rôle                                                                   |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `ApiExceptionFilter`        | toute erreur devient une réponse RFC 9457 (`application/problem+json`) |
+| `RequestLoggingInterceptor` | une ligne de journal par requête, avec son identifiant de corrélation  |
+
+Les extraits viennent de l'[application d'exemple](./example-app).
+
+## Enregistrement
+
+{/* snippet: apps/example-nest/src/app.module.ts#app-module */}
+
+```ts title="src/app.module.ts"
+import {
+  ApiExceptionFilter,
+  PermissionsModule,
+  RequestLoggingInterceptor,
+} from "@etiennea20/adr-nest";
+import { Module } from "@nestjs/common";
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from "@nestjs/core";
+
+import { memberSubject, permissions } from "./auth";
+import { BooksModule } from "./books";
+import { HealthController } from "./health";
+import { LoansModule } from "./loans";
+import { RemindersModule } from "./reminders";
+import { nativeValidationPipe } from "./validation";
+
+@Module({
+  imports: [
+    // Guard global à refus par défaut ; le démarrage échoue si une route n'est pas annotée.
+    PermissionsModule.forRoot({ permissions, subject: memberSubject }),
+    BooksModule,
+    LoansModule,
+    RemindersModule.forRoot({ daysBeforeDue: 5 }),
+  ],
+  controllers: [HealthController],
+  providers: [
+    { provide: APP_PIPE, useValue: nativeValidationPipe },
+    // Toute erreur au format d'API (RFC 9457), avec l'identifiant de corrélation.
+    { provide: APP_FILTER, useClass: ApiExceptionFilter },
+    // Une ligne de journal par requête : `GET /livres 200 3 ms [<requestId>]`.
+    { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
+  ],
+})
+export class AppModule {}
+```
+
+## Le filtre d'exceptions
+
+| Erreur levée                              | Réponse                                                                      |
+| ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `ApiException` (validation, permissions…) | son corps, tel quel                                                          |
+| `NotFoundException("Livre introuvable.")` | 404 `NOT_FOUND`, titre français, message en `detail`                         |
+| `BadRequestException(["a", "b"])`         | 400 `BAD_REQUEST`, messages dans `errors`                                    |
+| toute autre erreur (`TypeError`, base…)   | 500 `INTERNAL_ERROR` **sans** le message d'origine, journalisée avec la pile |
+
+Chaque réponse porte `instance` (chemin de la requête, sans paramètres d'URL) et `requestId` :
+
+```json
+{
+  "type": "about:blank",
+  "title": "Ressource introuvable",
+  "status": 404,
+  "code": "NOT_FOUND",
+  "detail": "Livre « 42 » introuvable.",
+  "instance": "/livres/42",
+  "requestId": "4b7d1c2e-…"
+}
+```
+
+Le filtre passe par l'adaptateur HTTP de NestJS : il fonctionne avec Express comme avec
+Fastify. Si l'erreur survient alors que l'envoi a commencé (export en flux), il ne peut que
+clore la réponse : d'où l'intérêt de `assertExportSize` **avant** l'envoi.
+
+## Identifiant de corrélation
+
+- **Origine** : l'en-tête `x-request-id` de la requête (posé par un proxy ou par le front) s'il
+  est sûr (lettres, chiffres, `_ . : -`, 128 caractères au plus), sinon un UUID généré.
+- **Partout le même** : renvoyé dans l'en-tête `x-request-id` de la réponse, dans `requestId`
+  des erreurs et dans les journaux. Un utilisateur qui signale une erreur donne cet
+  identifiant ; on retrouve la ligne de journal correspondante.
+- **Dans le code** : `@RequestId()` (paramètre de route) ou `requestIdOf(request)`.
+
+## Journal des requêtes
+
+```text
+[HTTP] GET /livres 200 3 ms [4b7d1c2e-…]
+[HTTP] POST /emprunts/emprunt-2/annulation 403 1 ms [front-42]
+```
+
+- `log` pour un succès, `warn` pour une 4xx, `error` pour une 5xx (la pile vient du filtre).
+- Les paramètres d'URL ne sont pas journalisés : ils peuvent contenir un jeton ou une donnée
+  personnelle.
+- Une requête refusée par un guard (401, 403 de `PermissionsGuard`) n'atteint pas les
+  intercepteurs : elle reçoit bien la réponse d'erreur du filtre, mais pas de ligne de
+  journal.
+- Le journal passe par le `Logger` de NestJS : remplacer celui-ci (`app.useLogger(…)`) suffit
+  pour écrire en JSON ou vers un autre service.
