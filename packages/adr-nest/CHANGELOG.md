@@ -1,5 +1,13 @@
 # @etiennea20/adr-nest
 
+## 0.2.0
+
+### Minor Changes
+
+- [#16](https://github.com/EtienneA20/adr-package/pull/16) [`859c257`](https://github.com/EtienneA20/adr-package/commit/859c257d347681bfb4f86f5d548444172965ecb9) Thanks [@EtienneA20](https://github.com/EtienneA20)! - Ajoute le sous-chemin `@etiennea20/adr-nest/filtering` (peerDependencies optionnelles `@etiennea20/adr-misc` ≥ 0.3 et `zod` ≥ 4) : décorateur `ListQuery` qui valide une requête de liste avec le contrat partagé avec le front et la convertit en critères neutres (`IListCriteria`), `parseListQuery`, `toListCriteria`, `andCriteria`, `applyCriteriaInMemory` et `toPage`. Ajoute le sous-chemin `@etiennea20/adr-nest/prisma` : `toPrismaFindArgs` et `toPrismaWhere` (objets simples, sans dépendance à `@prisma/client`).
+
+- [#16](https://github.com/EtienneA20/adr-package/pull/16) [`87a3b8a`](https://github.com/EtienneA20/adr-package/commit/87a3b8ace911f77db92a5b6ef2e0ddb66cd9dee7) Thanks [@EtienneA20](https://github.com/EtienneA20)! - Ajoute la catégorie `common` : format d'erreur d'API RFC 9457 (`IApiError`, `EApiErrorCode`, `API_ERROR_CONTENT_TYPE`, identiques à ceux d'`@etiennea20/adr-misc/contract`), `ApiException`, `ValidationException`, et la validation par schéma Standard Schema (zod 4…) sous NestJS 11 et 12 : `SchemaValidationPipe`, `ValidBody`, `ValidQuery`, et `apiValidationExceptionFactory` pour le pipe natif de NestJS 12. Aucune nouvelle peerDependency.
+
 ## 0.1.1
 
 ### Patch Changes
