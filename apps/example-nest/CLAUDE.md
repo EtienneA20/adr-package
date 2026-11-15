@@ -23,8 +23,13 @@ compilé, linté et testé.
 - Une région citée par la doc est délimitée par `// #region <nom>` et `// #endregion <nom>`
   (marqueurs retirés de l'extrait). Après toute modification d'un fichier cité :
   `pnpm run sync:snippets`, puis commiter les pages mises à jour (`--check` en CI).
-- Pas de `main.ts` : démarrer un serveur HTTP demanderait `@nestjs/platform-express`, absent
-  du dépôt (le proposer avant de l'ajouter).
+- Tests de bout en bout dans `src/app.e2e.test.ts` : l'application complète sur Express
+  (`@nestjs/platform-express`, devDependency de cet exemple uniquement), écoutant sur
+  `127.0.0.1` et un port choisi par le système, appelée avec le `fetch` de Node (pas de
+  supertest). L'authentification est simulée par un middleware de test (en-tête
+  `x-test-user` → `request.user`). Une application par test (`beforeEach`), pour que les
+  dépôts en mémoire repartent de zéro. Toute nouvelle route y reçoit au moins un test.
+- Pas de `main.ts` : l'application n'est jamais lancée hors des tests.
 
 ## Docker et build de la doc
 
