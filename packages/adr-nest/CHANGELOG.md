@@ -1,5 +1,20 @@
 # @etiennea20/adr-nest
 
+## 0.3.0
+
+### Minor Changes
+
+- [#22](https://github.com/EtienneA20/adr-package/pull/22) [`a2483b3`](https://github.com/EtienneA20/adr-package/commit/a2483b3479f8372214c4503692c3f5a5d60e4b27) Thanks [@EtienneA20](https://github.com/EtienneA20)! - Ajoute `ApiExceptionFilter` (toute erreur au format d'erreur d'API RFC 9457, `instance` et `requestId`, erreurs inattendues masquées et journalisées), `RequestLoggingInterceptor` (une ligne de journal par requête), l'identifiant de corrélation (`REQUEST_ID_HEADER`, `requestIdOf`, `RequestId`), `defineConfigurableModule` (module `forRoot` / `forRootAsync` à options validées par schéma, `ModuleOptionsError`) et le type `InferSchemaInput`.
+
+- [#20](https://github.com/EtienneA20/adr-package/pull/20) [`c24d33b`](https://github.com/EtienneA20/adr-package/commit/c24d33b5f6ee10a3fa3e8ccb3c105f7899cd8b39) Thanks [@EtienneA20](https://github.com/EtienneA20)! - Ajoute le sous-chemin `@etiennea20/adr-nest/export` (peerDependency optionnelle `@etiennea20/adr-misc` ≥ 0.3) : colonnes en liste blanche (`defineExportColumns`, `selectExportColumns`), exports JSON, NDJSON et CSV (Excel en français) en flux, neutralisation des formules, limite de lignes (`assertExportSize`, `limitExportRows`, 50 000 par défaut, `ExportLimitExceededException`), réponse `createExportFile` (nom de fichier assaini) et `ExportHeaders`. Ajoute le sous-chemin `@etiennea20/adr-nest/excel` (peerDependency optionnelle `fflate` ≥ 0.8) : `toXlsxExport`, XLSX en flux à cellules typées au format français, protégé contre l'injection de formules.
+
+- [#21](https://github.com/EtienneA20/adr-package/pull/21) [`e86a7ff`](https://github.com/EtienneA20/adr-package/commit/e86a7ff56ebf6f7e5505e0dfd82782fd1b50ec7f) Thanks [@EtienneA20](https://github.com/EtienneA20)! - Ajoute les permissions à refus par défaut : `PermissionsModule` (`forRoot` / `forRootAsync`, guard global, contrôle des routes au démarrage en mode strict), `PermissionsService` (`canOnSome`, `can`, `assertCan`, `scope` combinable avec `andCriteria`), `PermissionsGuard`, les décorateurs `Authenticated`, `Can` et `CurrentSubject`, des règles sérialisables validées par `definePermissions` (rôle → `{ action, resource, where }`, références `$subject.…`), et les erreurs `UnauthenticatedException` (401), `PermissionDeniedException` (403) et `PermissionsConfigError`. `Public` et `IS_PUBLIC_KEY` sont inchangés.
+
+### Patch Changes
+
+- Updated dependencies [[`6e4d499`](https://github.com/EtienneA20/adr-package/commit/6e4d49970abc4b31d5c601ed8da172cf34672d04)]:
+  - @etiennea20/adr-misc@0.4.0
+
 ## 0.2.0
 
 ### Minor Changes
