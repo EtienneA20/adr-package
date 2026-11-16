@@ -40,7 +40,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "prettier": "catalog:",
-    "turbo": "^2.11.10",
+    "turbo": "^2.11.11",
     "typescript": "catalog:"
   }
 }
