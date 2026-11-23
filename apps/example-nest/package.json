@@ -12,8 +12,8 @@
   "dependencies": {
     "@etiennea20/adr-misc": "workspace:*",
     "@etiennea20/adr-nest": "workspace:*",
-    "@nestjs/common": "^12.5.0",
-    "@nestjs/core": "^12.5.0",
+    "@nestjs/common": "^12.5.1",
+    "@nestjs/core": "^12.5.1",
     "dayjs": "^1.11.23",
     "fflate": "^0.8.3",
     "reflect-metadata": "^0.2.2",
@@ -22,8 +22,8 @@
   },
   "devDependencies": {
     "@etiennea20/config": "workspace:*",
-    "@nestjs/platform-express": "^12.5.0",
-    "@nestjs/testing": "^12.5.0",
+    "@nestjs/platform-express": "^12.5.1",
+    "@nestjs/testing": "^12.5.1",
     "@swc/core": "^1.16.22",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
